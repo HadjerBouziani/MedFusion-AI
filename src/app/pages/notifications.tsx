@@ -77,39 +77,46 @@ export function Notifications() {
   const getIcon = (type: Notification['type']) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="w-6 h-6 text-green-600" />;
+        return <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />;
       case 'warning':
-        return <AlertTriangle className="w-6 h-6 text-amber-600" />;
+        return <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />;
       case 'info':
-        return <Info className="w-6 h-6 text-blue-600" />;
+        return <Info className="w-6 h-6 text-blue-600 dark:text-blue-400" />;
       case 'update':
-        return <Activity className="w-6 h-6 text-purple-600" />;
+        return <Activity className="w-6 h-6 text-purple-600 dark:text-purple-400" />;
     }
   };
 
   const getBgColor = (type: Notification['type']) => {
     switch (type) {
       case 'success':
-        return 'bg-green-50 border-green-200';
+        return 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800';
       case 'warning':
-        return 'bg-amber-50 border-amber-200';
+        return 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800';
       case 'info':
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800';
       case 'update':
-        return 'bg-purple-50 border-purple-200';
+        return 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800';
     }
+  };
+
+  const getCardStyles = (notification: Notification) => {
+    if (notification.read) {
+      return 'bg-white/50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700';
+    }
+    return 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 shadow-md';
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Notifications</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Notifications</h1>
+          <p className="text-gray-600 dark:text-gray-400">
             {unreadCount > 0 ? (
               <>
-                You have <span className="font-semibold text-blue-600">{unreadCount}</span> unread
+                You have <span className="font-semibold text-blue-600 dark:text-blue-400">{unreadCount}</span> unread
                 notification{unreadCount > 1 ? 's' : ''}
               </>
             ) : (
@@ -119,11 +126,17 @@ export function Notifications() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+          >
             <CheckCheck className="w-4 h-4" />
             Mark All as Read
           </Button>
-          <Button variant="outline" className="flex items-center gap-2 text-red-600 hover:text-red-700">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border-gray-200 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
             <Trash2 className="w-4 h-4" />
             Clear All
           </Button>
@@ -135,9 +148,7 @@ export function Notifications() {
         {notifications.map((notification) => (
           <Card
             key={notification.id}
-            className={`border-2 transition-all duration-300 hover:shadow-lg ${
-              notification.read ? 'bg-white/50 border-gray-200' : 'bg-white border-blue-300 shadow-md'
-            }`}
+            className={`border-2 transition-all duration-300 hover:shadow-lg ${getCardStyles(notification)}`}
           >
             <CardContent className="pt-6 pb-6">
               <div className="flex items-start gap-4">
@@ -148,17 +159,21 @@ export function Notifications() {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <h3 className="font-bold text-gray-900 text-lg">{notification.title}</h3>
+                  <div className="flex items-start justify-between gap-4 mb-2 flex-wrap">
+                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">{notification.title}</h3>
                     {!notification.read && (
-                      <Badge className="bg-blue-500 text-white border-0 flex-shrink-0">New</Badge>
+                      <Badge className="bg-blue-500 dark:bg-blue-600 text-white border-0 flex-shrink-0">New</Badge>
                     )}
                   </div>
-                  <p className="text-gray-600 mb-3">{notification.message}</p>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-500">{notification.time}</span>
+                  <p className="text-gray-600 dark:text-gray-400 mb-3">{notification.message}</p>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className="text-sm text-gray-500 dark:text-gray-500">{notification.time}</span>
                     {!notification.read && (
-                      <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                      >
                         Mark as Read
                       </Button>
                     )}
@@ -169,7 +184,7 @@ export function Notifications() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-gray-400 hover:text-red-600 flex-shrink-0"
+                  className="text-gray-400 dark:text-gray-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex-shrink-0"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -180,11 +195,11 @@ export function Notifications() {
       </div>
 
       {notifications.length === 0 && (
-        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
+        <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur">
           <CardContent className="pt-16 pb-16 text-center">
-            <Bell className="w-20 h-20 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No notifications</h3>
-            <p className="text-gray-600">You're all caught up!</p>
+            <Bell className="w-20 h-20 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No notifications</h3>
+            <p className="text-gray-600 dark:text-gray-400">You're all caught up!</p>
           </CardContent>
         </Card>
       )}

@@ -141,11 +141,11 @@ function ModalityDropdown({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:shadow-md transition-all"
+        className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:shadow-md transition-all"
       >
         <Brain className={`w-4 h-4 ${colorClass}`} />
         {selected}
-        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 dark:text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -161,10 +161,10 @@ function ModalityDropdown({
                     : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
-                <Brain className="w-4 h-4 text-gray-400" />
+                <Brain className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                 {m}
                 {selected === m && (
-                  <svg className="w-3.5 h-3.5 ml-auto text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5 ml-auto text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -213,15 +213,58 @@ export function Dashboard() {
   const perfData = modalityData[perfModality];
   const distData = modalityData[distModality];
 
+  // Custom tooltip for dark mode
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg p-3">
+          <p className="text-gray-900 dark:text-white font-semibold">{label}</p>
+          <p className="text-blue-600 dark:text-blue-400">
+            Accuracy: {payload[0].value}%
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomBarTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg p-3">
+          <p className="text-gray-900 dark:text-white font-semibold">{label}</p>
+          <p className="text-green-600 dark:text-green-400">
+            Cases: {payload[0].value}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg p-3">
+          <p className="text-gray-900 dark:text-white font-semibold">{payload[0].name}</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Count: {payload[0].value}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20 lg:pb-8">
       {/* Welcome */}
       <div className="animate-fade-in flex items-start justify-between">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900 tracking-tight bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white tracking-tight bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 dark:from-white dark:via-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
             Welcome back, Dr. Johnson
           </h1>
-          <p className="text-gray-600 mt-2 text-lg">Here's an overview of your diagnostic activity and model performance</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-2 text-lg">Here's an overview of your diagnostic activity and model performance</p>
         </div>
         <Link to="/diagnosis">
           <button className="hidden md:flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl transition-all hover:-translate-y-1">
@@ -317,41 +360,34 @@ export function Dashboard() {
       {/* Charts row — Performance + Distribution */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Model Performance Chart */}
-        <Card className="lg:col-span-2 border-0 bg-white/90 backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300">
+        <Card className="lg:col-span-2 border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-xl flex items-center gap-2 text-gray-900 dark:text-white">
+                  <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   Model Performance Trend
                 </CardTitle>
-                <CardDescription className="mt-1">
+                <CardDescription className="mt-1 text-gray-500 dark:text-gray-400">
                   Accuracy over 6 months — {perfData.models.length} model{perfData.models.length > 1 ? 's' : ''}: {perfData.models.join(', ')}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-3">
-                <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 border-0 hidden sm:flex">
+                <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 border-0 hidden sm:flex text-white">
                   <TrendingUp className="w-3 h-3 mr-1" />
                   Improving
                 </Badge>
-                <ModalityDropdown selected={perfModality} onChange={(v) => setPerfModality(v as keyof typeof modalityData)} colorClass="text-blue-600" />
+                <ModalityDropdown selected={perfModality} onChange={(v) => setPerfModality(v as keyof typeof modalityData)} colorClass="text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={perfData.accuracyHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="month" stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <YAxis domain={[85, 100]} stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(255,255,255,0.95)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                  }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.3} />
+                <XAxis dataKey="month" stroke="#6b7280" className="dark:[&_tspan]:fill-gray-400" style={{ fontSize: '12px' }} />
+                <YAxis domain={[85, 100]} stroke="#6b7280" className="dark:[&_tspan]:fill-gray-400" style={{ fontSize: '12px' }} />
+                <Tooltip content={<CustomTooltip />} />
                 <Line
                   type="monotone"
                   dataKey="accuracy"
@@ -372,17 +408,17 @@ export function Dashboard() {
         </Card>
 
         {/* Case Distribution */}
-        <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300">
+        <Card className="border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <Target className="w-5 h-5 text-purple-600" />
+                <CardTitle className="text-xl flex items-center gap-2 text-gray-900 dark:text-white">
+                  <Target className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                   Case Distribution
                 </CardTitle>
-                <CardDescription>By imaging type</CardDescription>
+                <CardDescription className="text-gray-500 dark:text-gray-400">By imaging type</CardDescription>
               </div>
-              <ModalityDropdown selected={distModality} onChange={(v) => setDistModality(v as keyof typeof modalityData)} colorClass="text-purple-600" />
+              <ModalityDropdown selected={distModality} onChange={(v) => setDistModality(v as keyof typeof modalityData)} colorClass="text-purple-600 dark:text-purple-400" />
             </div>
           </CardHeader>
           <CardContent>
@@ -401,7 +437,7 @@ export function Dashboard() {
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip content={<CustomPieTooltip />} />
               </PieChart>
             </ResponsiveContainer>
             <div className="mt-4 space-y-2">
@@ -409,9 +445,9 @@ export function Dashboard() {
                 <div key={item.name} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-gray-700 font-medium">{item.name}</span>
+                    <span className="text-gray-700 dark:text-gray-300 font-medium">{item.name}</span>
                   </div>
-                  <span className="font-semibold text-gray-900">{item.value}</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{item.value}</span>
                 </div>
               ))}
             </div>
@@ -421,28 +457,21 @@ export function Dashboard() {
 
       {/* Weekly Activity & Notifications */}
       <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 border-0 bg-white/90 backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300">
+        <Card className="lg:col-span-2 border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Activity className="w-5 h-5 text-green-600" />
+            <CardTitle className="text-xl flex items-center gap-2 text-gray-900 dark:text-white">
+              <Activity className="w-5 h-5 text-green-600 dark:text-green-400" />
               Weekly Activity
             </CardTitle>
-            <CardDescription>Cases analyzed per day this week</CardDescription>
+            <CardDescription className="text-gray-500 dark:text-gray-400">Cases analyzed per day this week</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={weeklyActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="day" stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(255,255,255,0.95)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                  }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.3} />
+                <XAxis dataKey="day" stroke="#6b7280" className="dark:[&_tspan]:fill-gray-400" style={{ fontSize: '12px' }} />
+                <YAxis stroke="#6b7280" className="dark:[&_tspan]:fill-gray-400" style={{ fontSize: '12px' }} />
+                <Tooltip content={<CustomBarTooltip />} />
                 <Bar dataKey="cases" fill="url(#barGradient)" radius={[8, 8, 0, 0]} />
                 <defs>
                   <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
@@ -455,48 +484,48 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300">
+        <Card className="border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Bell className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-xl flex items-center gap-2 text-gray-900 dark:text-white">
+              <Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               Notifications
             </CardTitle>
-            <CardDescription>Important updates</CardDescription>
+            <CardDescription className="text-gray-500 dark:text-gray-400">Important updates</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/50 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
+            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 border border-blue-200/50 dark:border-blue-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <CheckCircle className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-blue-900 text-sm">Model Update</p>
-                  <p className="text-sm text-blue-700 mt-1 leading-relaxed">v2.3.1 deployed successfully</p>
-                  <p className="text-xs text-blue-600 mt-2 font-medium">2 hours ago</p>
+                  <p className="font-semibold text-blue-900 dark:text-blue-300 text-sm">Model Update</p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1 leading-relaxed">v2.3.1 deployed successfully</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-2 font-medium">2 hours ago</p>
                 </div>
               </div>
             </div>
-            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200/50 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
+            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-800/10 border border-green-200/50 dark:border-green-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <TrendingUp className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-green-900 text-sm">Performance Boost</p>
-                  <p className="text-sm text-green-700 mt-1 leading-relaxed">+2.3% accuracy increase</p>
-                  <p className="text-xs text-green-600 mt-2 font-medium">1 day ago</p>
+                  <p className="font-semibold text-green-900 dark:text-green-300 text-sm">Performance Boost</p>
+                  <p className="text-sm text-green-700 dark:text-green-400 mt-1 leading-relaxed">+2.3% accuracy increase</p>
+                  <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">1 day ago</p>
                 </div>
               </div>
             </div>
-            <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200/50 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
+            <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/10 border border-amber-200/50 dark:border-amber-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <Clock className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-amber-900 text-sm">Case Complete</p>
-                  <p className="text-sm text-amber-700 mt-1 leading-relaxed">P-001240 ready for review</p>
-                  <p className="text-xs text-amber-600 mt-2 font-medium">5 hours ago</p>
+                  <p className="font-semibold text-amber-900 dark:text-amber-300 text-sm">Case Complete</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">P-001240 ready for review</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-2 font-medium">5 hours ago</p>
                 </div>
               </div>
             </div>
@@ -505,17 +534,17 @@ export function Dashboard() {
       </div>
 
       {/* Recent Cases */}
-      <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl hover:shadow-2xl transition-all duration-300">
+      <Card className="border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-xl flex items-center gap-2 text-gray-900 dark:text-white">
+              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               Recent Cases
             </CardTitle>
-            <CardDescription className="mt-1">Your latest diagnostic analyses</CardDescription>
+            <CardDescription className="mt-1 text-gray-500 dark:text-gray-400">Your latest diagnostic analyses</CardDescription>
           </div>
           <Link to="/history">
-            <button className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 group hover:bg-blue-50 px-4 py-2 rounded-lg transition-all">
+            <button className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 group hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-lg transition-all">
               View all
               <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
@@ -524,11 +553,11 @@ export function Dashboard() {
         <CardContent>
           {recentCases.length === 0 ? (
             <div className="text-center py-16">
-              <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-10 h-10 text-gray-400" />
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-10 h-10 text-gray-400 dark:text-gray-500" />
               </div>
-              <p className="text-gray-600 font-semibold text-lg mb-2">No cases yet</p>
-              <p className="text-gray-500 mb-6">Start analyzing medical images to see them here</p>
+              <p className="text-gray-600 dark:text-gray-400 font-semibold text-lg mb-2">No cases yet</p>
+              <p className="text-gray-500 dark:text-gray-500 mb-6">Start analyzing medical images to see them here</p>
               <Link to="/diagnosis">
                 <button className="px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/30 transition-all hover:-translate-y-1">
                   Start your first analysis
@@ -539,15 +568,15 @@ export function Dashboard() {
             <div className="space-y-3">
               {recentCases.map((caseItem) => (
                 <Link key={caseItem.id} to={`/case/${caseItem.id}`}>
-                  <div className="flex items-center gap-4 p-5 border border-gray-200/50 rounded-xl hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all cursor-pointer group hover:shadow-xl">
+                  <div className="flex items-center gap-4 p-5 border border-gray-200/50 dark:border-slate-700/50 rounded-xl hover:border-blue-300 dark:hover:border-blue-700 hover:bg-gradient-to-r hover:from-blue-50/50 dark:hover:from-blue-900/10 hover:to-transparent transition-all cursor-pointer group hover:shadow-xl">
                     <img
                       src={caseItem.imageUrl}
                       alt={caseItem.diagnosis}
-                      className="w-20 h-20 rounded-xl object-cover ring-2 ring-gray-200 group-hover:ring-blue-400 transition-all group-hover:scale-105"
+                      className="w-20 h-20 rounded-xl object-cover ring-2 ring-gray-200 dark:ring-slate-700 group-hover:ring-blue-400 dark:group-hover:ring-blue-600 transition-all group-hover:scale-105"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <p className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors text-lg">{caseItem.diagnosis}</p>
+                        <p className="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors text-lg">{caseItem.diagnosis}</p>
                         <Badge
                           className={`text-xs ${
                             caseItem.confidence > 85
@@ -558,18 +587,18 @@ export function Dashboard() {
                           {caseItem.confidence}% confident
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-600 font-medium">Patient ID: {caseItem.patientId}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Patient ID: {caseItem.patientId}</p>
                     </div>
                     <div className="text-right flex flex-col gap-2">
                       <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 border-0 text-white font-semibold">
                         {caseItem.imageType.toUpperCase()}
                       </Badge>
-                      <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                      <p className="text-xs text-gray-500 dark:text-gray-500 font-medium flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {new Date(caseItem.date).toLocaleDateString()}
                       </p>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
                   </div>
                 </Link>
               ))}

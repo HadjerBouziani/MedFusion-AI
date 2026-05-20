@@ -4,12 +4,14 @@ import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Calendar, Search, Filter, Trash2 } from 'lucide-react';
+import { Calendar, Search, Filter, Trash2, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router';
 
 export function CaseHistory() {
+  const navigate = useNavigate();
   const { cases, deleteCase } = useCases();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
@@ -41,8 +43,15 @@ export function CaseHistory() {
     setConfirmDeleteId(null);
   };
 
+  const handleGoBack = () => {
+    navigate(-1);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-20 lg:pb-8">
+      {/* Back Button */}
+
+
       {/* Page Header */}
       <div>
         <h2 className="text-3xl font-semibold text-gray-900 dark:text-white">Case History</h2>
@@ -50,31 +59,31 @@ export function CaseHistory() {
       </div>
 
       {/* Filters */}
-      <Card className="border-gray-200 dark:border-slate-700 shadow-sm">
+      <Card className="border-gray-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800">
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Search by patient ID or diagnosis..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-11"
+                className="pl-10 h-11 bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
             </div>
             <div className="flex items-center gap-2 sm:w-auto">
-              <Filter className="w-4 h-4 text-gray-400" />
+              <Filter className="w-4 h-4 text-gray-400 dark:text-gray-500" />
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-48 h-11">
+                <SelectTrigger className="w-full sm:w-48 h-11 bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
                   <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="xray">X-Ray</SelectItem>
-                  <SelectItem value="skin">Skin Lesion</SelectItem>
-                  <SelectItem value="retina">Retinal Scan</SelectItem>
-                  <SelectItem value="ct">CT Scan</SelectItem>
-                  <SelectItem value="mri">MRI</SelectItem>
+                <SelectContent className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700">
+                  <SelectItem value="all" className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700">All Types</SelectItem>
+                  <SelectItem value="xray" className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700">X-Ray</SelectItem>
+                  <SelectItem value="skin" className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700">Skin Lesion</SelectItem>
+                  <SelectItem value="retina" className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700">Retinal Scan</SelectItem>
+                  <SelectItem value="ct" className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700">CT Scan</SelectItem>
+                  <SelectItem value="mri" className="text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700">MRI</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -94,11 +103,11 @@ export function CaseHistory() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCases.length === 0 ? (
           <div className="col-span-full">
-            <Card className="border-gray-200 dark:border-slate-700 shadow-sm">
+            <Card className="border-gray-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800">
               <CardContent className="py-24">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 text-gray-400" />
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-8 h-8 text-gray-400 dark:text-gray-500" />
                   </div>
                   <p className="text-gray-600 dark:text-gray-400 font-medium">No cases found</p>
                   <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Try adjusting your filters</p>
@@ -110,15 +119,15 @@ export function CaseHistory() {
           filteredCases.map((caseItem) => (
             <div key={caseItem.id} className="relative group">
               <Link to={`/case/${caseItem.id}`}>
-                <Card className="h-full border-gray-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer group">
+                <Card className="h-full border-gray-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer group bg-white dark:bg-slate-800">
                   <CardContent className="p-0">
-                    <div className="aspect-video relative overflow-hidden rounded-t-lg bg-gray-100 dark:bg-slate-800">
+                    <div className="aspect-video relative overflow-hidden rounded-t-lg bg-gray-100 dark:bg-slate-700">
                       <img
                         src={caseItem.imageUrl}
                         alt={caseItem.diagnosis}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
-                      <Badge className="absolute top-3 right-3 shadow-sm">
+                      <Badge className="absolute top-3 right-3 shadow-sm bg-gradient-to-r from-blue-500 to-indigo-600 border-0 text-white">
                         {caseItem.imageType.toUpperCase()}
                       </Badge>
                     </div>
@@ -131,7 +140,13 @@ export function CaseHistory() {
                       </div>
                       <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-700">
                         <span className="text-sm text-gray-600 dark:text-gray-400">Confidence</span>
-                        <Badge variant={caseItem.confidence > 85 ? 'default' : 'secondary'}>
+                        <Badge 
+                          variant={caseItem.confidence > 85 ? 'default' : 'secondary'}
+                          className={caseItem.confidence > 85 
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 border-0 text-white' 
+                            : 'bg-gradient-to-r from-amber-500 to-orange-600 border-0 text-white'
+                          }
+                        >
                           {caseItem.confidence}%
                         </Badge>
                       </div>
@@ -170,7 +185,7 @@ export function CaseHistory() {
                     className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 w-8 h-8 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/30 border border-gray-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-600 rounded-lg flex items-center justify-center shadow-sm"
                     title="Delete case"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500 transition-colors" />
+                    <Trash2 className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors" />
                   </button>
                 )}
               </div>

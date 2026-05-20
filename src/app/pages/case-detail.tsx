@@ -112,16 +112,15 @@ export function CaseDetail() {
   const caseData = id ? getCaseById(id) : null;
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'heatmap' | 'clinical'>('heatmap');
-  // NEW: toggle between original scan and Grad-CAM heatmap inside the image card
   const [imageView, setImageView] = useState<'original' | 'gradcam'>('original');
 
   if (!caseData) {
     return (
       <div className="max-w-6xl mx-auto min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
-          <Microscope className="w-8 h-8 text-gray-400" />
+          <Microscope className="w-8 h-8 text-gray-400 dark:text-gray-500" />
         </div>
-        <p className="text-gray-900 dark:text-white font-semibold">Case not found</p>
+        <p className="text-gray-900 dark:text-white font-semibold text-lg">Case not found</p>
         <Link to="/history">
           <Button variant="outline" className="gap-2">
             <ArrowLeft className="w-4 h-4" /> Back to History
@@ -168,45 +167,44 @@ export function CaseDetail() {
         />
       )}
 
-      <div className="max-w-6xl mx-auto space-y-5 pb-16">
+      <div className="max-w-6xl mx-auto space-y-6 pb-20 lg:pb-8">
 
         {/* ── Nav bar ── */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/history">
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-xl h-9">
-                <ArrowLeft className="w-3.5 h-3.5" /> Back
+              <Button variant="outline" size="default" className="gap-2 rounded-xl">
+                <ArrowLeft className="w-4 h-4" /> Back
               </Button>
             </Link>
-            <div className="flex items-center gap-1.5 text-sm text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span>Cases</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-              <span className="text-gray-700 dark:text-gray-200 font-medium">{caseData.patientId}</span>
+              <ChevronRight className="w-4 h-4" />
+              <span className="text-gray-900 dark:text-gray-200 font-medium">{caseData.patientId}</span>
             </div>
           </div>
           <Button
             onClick={downloadReport}
-            size="sm"
-            className="gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/20 h-9"
+            className="gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/20"
           >
-            <Download className="w-3.5 h-3.5" /> Download Report
+            <Download className="w-4 h-4" /> Download Report
           </Button>
         </div>
 
         {/* ── HERO ── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 px-6 py-5 shadow-2xl">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 p-6 shadow-2xl">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTQwIDAgTDAgMCAwIDQwIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utb3BhY2l0eT0iMC4wMyIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2cpIi8+PC9zdmc+')] opacity-60" />
           <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-blue-600/10 to-transparent" />
           <div className="relative flex flex-wrap items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-              <Stethoscope className="w-6 h-6 text-white" />
+            <div className="w-14 h-14 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
+              <Stethoscope className="w-7 h-7 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <Badge className="bg-white/10 text-white border-white/15 border text-[11px] px-2 py-0.5">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <Badge className="bg-white/10 text-white border-white/15 border">
                   {caseData.imageType.toUpperCase()}
                 </Badge>
-                <Badge className={`text-[11px] px-2 py-0.5 border ${
+                <Badge className={`${
                   caseData.imageQuality === 'good'
                     ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
                     : 'bg-amber-500/15 text-amber-300 border-amber-500/25'
@@ -214,92 +212,92 @@ export function CaseDetail() {
                   {caseData.imageQuality} quality
                 </Badge>
               </div>
-              <h1 className="text-2xl font-bold text-white truncate">{caseData.diagnosis}</h1>
-              <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+              <h1 className="text-2xl font-bold text-white mb-1">{caseData.diagnosis}</h1>
+              <div className="flex items-center gap-3 text-sm text-slate-400">
                 <span>Patient <span className="text-slate-200 font-medium">{caseData.patientId}</span></span>
-                <span>·</span>
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(caseData.date).toLocaleString()}</span>
-                <span>·</span>
+                <span>•</span>
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{new Date(caseData.date).toLocaleString()}</span>
+                <span>•</span>
                 <span className="font-mono text-slate-300">{caseData.modelVersion}</span>
               </div>
             </div>
-            <div className={`flex-shrink-0 flex flex-col items-center justify-center w-20 h-20 rounded-2xl bg-white/5 border-2 ring-4 ${confRing} border-transparent`}>
+            <div className={`flex-shrink-0 flex flex-col items-center justify-center w-24 h-24 rounded-2xl bg-white/5 border-2 ring-4 ${confRing} border-transparent`}>
               <span className={`text-2xl font-bold ${confText}`}>{conf}%</span>
-              <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">conf.</span>
+              <span className="text-xs text-slate-400 uppercase tracking-widest mt-0.5">confidence</span>
             </div>
           </div>
         </div>
 
         {/* ── TWO-COLUMN LAYOUT ── */}
-        <div className="grid lg:grid-cols-5 gap-5">
+        <div className="grid lg:grid-cols-5 gap-6">
 
           {/* LEFT: Image with toggle + Predictions */}
-          <div className="lg:col-span-3 space-y-5">
+          <div className="lg:col-span-3 space-y-6">
 
             {/* ── Medical Image Card with Original / Grad-CAM toggle ── */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-lg overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
 
               {/* Header row */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-slate-700">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                    <Eye className="w-3.5 h-3.5 text-white" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                    <Eye className="w-4 h-4 text-white" />
                   </div>
-                  <span className="text-sm font-semibold text-gray-800 dark:text-white">Medical Image</span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">{caseData.imageType.toUpperCase()}</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">Medical Image</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{caseData.imageType.toUpperCase()}</span>
                 </div>
 
                 {/* View toggle pill */}
                 <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
                   <button
                     onClick={() => setImageView('original')}
-                    className={`flex items-center gap-1.5 px-3 h-7 text-xs font-semibold rounded-md transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       imageView === 'original'
-                        ? 'bg-white dark:bg-slate-600 text-gray-800 dark:text-white shadow-sm'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                     }`}
                   >
-                    <Image className="w-3 h-3" /> Original
+                    <Image className="w-4 h-4" /> Original
                   </button>
                   <button
                     onClick={() => setImageView('gradcam')}
-                    className={`flex items-center gap-1.5 px-3 h-7 text-xs font-semibold rounded-md transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                       imageView === 'gradcam'
-                        ? 'bg-white dark:bg-slate-600 text-gray-800 dark:text-white shadow-sm'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                     }`}
                   >
-                    <Zap className="w-3 h-3" /> Grad-CAM
-                    <Badge className="ml-0.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 border-0 text-[9px] px-1.5 py-0">XAI</Badge>
+                    <Zap className="w-4 h-4" /> Grad-CAM
+                    <Badge className="ml-0.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 border-0 text-xs px-1.5">XAI</Badge>
                   </button>
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={downloadImage}
-                    className="flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                   >
-                    <ImageDown className="w-3.5 h-3.5" /> Save
+                    <ImageDown className="w-4 h-4" /> Save
                   </button>
                   <button
                     onClick={() => setLightboxOpen(true)}
-                    className="flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
                   >
-                    <Maximize2 className="w-3.5 h-3.5" /> Open
+                    <Maximize2 className="w-4 h-4" /> Open
                   </button>
                 </div>
               </div>
 
               {/* Image canvas — switches between original and heatmap */}
-              <div className="relative bg-slate-950" style={{ minHeight: '280px' }}>
+              <div className="relative bg-slate-950" style={{ minHeight: '320px' }}>
                 {imageView === 'original' ? (
                   <div className="relative group cursor-pointer" onClick={() => setLightboxOpen(true)}>
                     <img
                       src={caseData.imageUrl}
                       alt={caseData.diagnosis}
                       className="w-full object-cover"
-                      style={{ maxHeight: '320px', objectFit: 'cover' }}
+                      style={{ maxHeight: '360px', objectFit: 'cover' }}
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-2.5">
@@ -309,14 +307,14 @@ export function CaseDetail() {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3">
+                  <div className="p-4">
                     {/* Grad-CAM legend bar */}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="flex items-center gap-1.5">
-                        <ScanEye className="w-3.5 h-3.5 text-rose-400" />
-                        <span className="text-xs text-slate-400 font-medium">AI attention map</span>
+                        <ScanEye className="w-4 h-4 text-rose-400" />
+                        <span className="text-sm text-slate-400 font-medium">AI attention map</span>
                       </div>
-                      <div className="flex-1 flex items-center gap-1.5 ml-auto justify-end">
+                      <div className="flex-1 flex items-center gap-2 ml-auto justify-end">
                         {[
                           { color: 'bg-blue-400', label: 'Low' },
                           { color: 'bg-yellow-400', label: 'Med' },
@@ -324,7 +322,7 @@ export function CaseDetail() {
                         ].map(({ color, label }) => (
                           <div key={label} className="flex items-center gap-1">
                             <div className={`w-5 h-2.5 rounded-sm ${color}`} />
-                            <span className="text-[10px] text-slate-500">{label}</span>
+                            <span className="text-xs text-slate-500">{label}</span>
                           </div>
                         ))}
                       </div>
@@ -340,39 +338,39 @@ export function CaseDetail() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-100 dark:border-slate-700">
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  <Calendar className="w-3.5 h-3.5" />
+              <div className="flex items-center gap-3 px-5 py-3 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                  <Calendar className="w-4 h-4" />
                   {new Date(caseData.date).toLocaleDateString()}
                 </div>
-                <span className="text-gray-300 dark:text-slate-600">·</span>
-                <div className={`flex items-center gap-1.5 text-xs font-medium ${
+                <span className="text-gray-300 dark:text-slate-600">•</span>
+                <div className={`flex items-center gap-1.5 text-sm font-medium ${
                   caseData.imageQuality === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
                 }`}>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-4 h-4" />
                   {caseData.imageQuality} quality
                 </div>
                 {imageView === 'gradcam' && (
                   <>
-                    <span className="text-gray-300 dark:text-slate-600">·</span>
-                    <span className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> Grad-CAM active
+                    <span className="text-gray-300 dark:text-slate-600">•</span>
+                    <span className="text-sm text-rose-500 dark:text-rose-400 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5" /> Grad-CAM active
                     </span>
                   </>
                 )}
-                <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 font-mono">{caseData.modelVersion}</span>
+                <span className="ml-auto text-sm text-gray-500 dark:text-gray-500 font-mono">{caseData.modelVersion}</span>
               </div>
             </div>
 
             {/* Confidence Breakdown */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-lg overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                  <BarChart3 className="w-3.5 h-3.5 text-white" />
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-200 dark:border-slate-700">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-sm font-semibold text-gray-800 dark:text-white">Confidence Breakdown</span>
+                <span className="font-semibold text-gray-900 dark:text-white">Confidence Breakdown</span>
               </div>
-              <div className="p-4 grid sm:grid-cols-2 gap-3">
+              <div className="p-5 grid sm:grid-cols-2 gap-3">
                 {caseData.allPredictions.map((pred, idx) => {
                   const isPrimary = pred.class === caseData.diagnosis;
                   return (
@@ -381,22 +379,22 @@ export function CaseDetail() {
                       className={`p-3 rounded-xl border transition-all ${
                         isPrimary
                           ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                          : 'bg-gray-50 dark:bg-slate-700/30 border-gray-100 dark:border-slate-700'
+                          : 'bg-gray-50 dark:bg-slate-700/30 border-gray-200 dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs font-semibold truncate mr-2 ${
-                          isPrimary ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400'
+                        <span className={`text-sm font-semibold truncate mr-2 ${
+                          isPrimary ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-400'
                         }`}>
                           {pred.class}
                         </span>
-                        <span className={`text-xs font-bold flex-shrink-0 ${
-                          isPrimary ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
+                        <span className={`text-sm font-bold flex-shrink-0 ${
+                          isPrimary ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
                         }`}>
                           {pred.confidence}%
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
                             isPrimary
@@ -414,17 +412,17 @@ export function CaseDetail() {
           </div>
 
           {/* RIGHT: Diagnosis + Info + Explanation */}
-          <div className="lg:col-span-2 space-y-5">
+          <div className="lg:col-span-2 space-y-6">
 
             {/* Diagnosis card */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-lg overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
               <div className={`h-1 bg-gradient-to-r ${confGradient}`} />
-              <div className="p-4 space-y-3">
+              <div className="p-5 space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    <Shield className="w-3.5 h-3.5 text-white" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-white" />
                   </div>
-                  <span className="text-sm font-semibold text-gray-800 dark:text-white">Diagnosis</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">Diagnosis</span>
                 </div>
                 <div className={`p-4 rounded-xl border ${
                   conf >= 90
@@ -433,23 +431,23 @@ export function CaseDetail() {
                     ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
                     : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
                 }`}>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-2">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight mb-2">
                     {caseData.diagnosis}
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge className={`text-xs border-0 text-white bg-gradient-to-r ${confGradient}`}>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className={`text-sm border-0 text-white bg-gradient-to-r ${confGradient}`}>
                       {conf}% confidence
                     </Badge>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-sm">
                       {caseData.imageType.toUpperCase()}
                     </Badge>
                   </div>
                 </div>
                 {caseData.uncertaintyWarning && (
                   <Alert className="border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-xl py-3">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    <AlertTitle className="text-amber-800 dark:text-amber-300 text-xs font-semibold">Warning</AlertTitle>
-                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertTitle className="text-amber-800 dark:text-amber-300 font-semibold">Warning</AlertTitle>
+                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm mt-0.5">
                       {caseData.uncertaintyWarning}
                     </AlertDescription>
                   </Alert>
@@ -458,20 +456,20 @@ export function CaseDetail() {
             </div>
 
             {/* Case info */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-lg overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                  <Brain className="w-3.5 h-3.5 text-white" />
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-200 dark:border-slate-700">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                  <Brain className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-sm font-semibold text-gray-800 dark:text-white">Case Information</span>
+                <span className="font-semibold text-gray-900 dark:text-white">Case Information</span>
               </div>
-              <div className="divide-y divide-gray-50 dark:divide-slate-700">
+              <div className="divide-y divide-gray-100 dark:divide-slate-700">
                 {[
                   { label: 'Patient ID', value: caseData.patientId, mono: true },
                   {
                     label: 'Image Quality',
                     el: (
-                      <Badge className={`text-xs capitalize ${
+                      <Badge className={`text-sm capitalize ${
                         caseData.imageQuality === 'good'
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
                           : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
@@ -483,10 +481,10 @@ export function CaseDetail() {
                   { label: 'Model', value: caseData.modelVersion, mono: true },
                   { label: 'Date', value: new Date(caseData.date).toLocaleDateString() },
                 ].map(({ label, value, mono, el }) => (
-                  <div key={label} className="flex items-center justify-between px-4 py-2.5">
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
+                  <div key={label} className="flex items-center justify-between px-5 py-3">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
                     {el ?? (
-                      <span className={`text-xs font-semibold text-gray-800 dark:text-gray-200 ${mono ? 'font-mono' : ''}`}>
+                      <span className={`text-sm font-semibold text-gray-900 dark:text-gray-200 ${mono ? 'font-mono' : ''}`}>
                         {value}
                       </span>
                     )}
@@ -496,46 +494,46 @@ export function CaseDetail() {
             </div>
 
             {/* Tabbed: Heatmap guide / Clinical notes */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-lg overflow-hidden">
-              <div className="flex border-b border-gray-100 dark:border-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
+              <div className="flex border-b border-gray-200 dark:border-slate-700">
                 {tabs.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`flex-1 py-3 text-xs font-semibold transition-colors capitalize ${
+                    className={`flex-1 py-3 text-sm font-semibold transition-colors capitalize ${
                       activeTab === tab
                         ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500'
-                        : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                     }`}
                   >
                     {tab === 'heatmap' ? 'Heatmap Guide' : 'Clinical Notes'}
                   </button>
                 ))}
               </div>
-              <div className="p-4">
+              <div className="p-5">
                 {activeTab === 'heatmap' ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {/* Quick shortcut to switch to Grad-CAM view */}
                     <button
                       onClick={() => setImageView('gradcam')}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                      className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
                         imageView === 'gradcam'
                           ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400'
-                          : 'bg-gray-50 dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
+                          : 'bg-gray-50 dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-400 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
                       }`}
                     >
-                      <Zap className="w-3.5 h-3.5 flex-shrink-0" />
+                      <Zap className="w-4 h-4 flex-shrink-0" />
                       {imageView === 'gradcam' ? 'Grad-CAM view is active ✓' : 'Click to switch to Grad-CAM view →'}
                     </button>
-                    <div className="flex gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                    <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                       <div className="w-1 rounded-full bg-gradient-to-b from-blue-500 to-indigo-500 flex-shrink-0" />
-                      <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                      <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">
                         <span className="font-semibold">Red/warm areas</span> show where the AI focused when detecting{' '}
                         <span className="font-semibold">{caseData.diagnosis.toLowerCase()}</span>. These regions had the
                         strongest influence on the final prediction.
                       </p>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-3">
                       {[
                         { color: 'bg-red-500', label: 'High attention' },
                         { color: 'bg-yellow-400', label: 'Medium' },
@@ -543,22 +541,22 @@ export function CaseDetail() {
                       ].map(({ color, label }) => (
                         <div key={label} className="flex flex-col items-center gap-1.5 p-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                           <div className={`w-6 h-3 rounded-sm ${color}`} />
-                          <span className="text-[10px] text-gray-500 dark:text-gray-400 text-center">{label}</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400 text-center">{label}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="relative p-3 bg-gray-50 dark:bg-slate-700/40 rounded-xl border border-gray-100 dark:border-slate-600">
-                      <div className="absolute top-3 left-3 w-0.5 h-6 rounded-full bg-gradient-to-b from-teal-500 to-emerald-500" />
-                      <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed pl-3.5">
+                  <div className="space-y-4">
+                    <div className="relative p-4 bg-gray-50 dark:bg-slate-700/40 rounded-xl border border-gray-200 dark:border-slate-600">
+                      <div className="absolute top-4 left-4 w-0.5 h-8 rounded-full bg-gradient-to-b from-teal-500 to-emerald-500" />
+                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed pl-4">
                         {caseData.clinicalExplanation}
                       </p>
                     </div>
-                    <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                    <div className="flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
                         This is a decision support tool. Always confirm with clinical examination and patient history.
                       </p>
                     </div>
