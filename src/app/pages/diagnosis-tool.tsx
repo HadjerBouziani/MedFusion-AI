@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -27,6 +27,7 @@ import {
   Shield,
   Target,
   Lightbulb,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,6 +38,429 @@ interface Model {
   name: string;
   status: 'Clinical Approved' | 'Experimental';
   accuracy: string;
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+
+function generatePatientId(): string {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const prefix = Array.from({ length: 2 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+  const number = Math.floor(10000 + Math.random() * 90000);
+  return `P-${prefix}${number}`;
+}
+
+// ── PDF Generation ─────────────────────────────────────────────────────────────
+
+async function loadJsPDF(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).jspdf) {
+      resolve((window as any).jspdf.jsPDF);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = () => resolve((window as any).jspdf.jsPDF);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+async function generateMedicalReport(params: {
+  patientInfo: { name: string; age: string; gender: string; medicalId: string };
+  selectedModality: Modality;
+  selectedModel: Model | null;
+  mockPrediction: { diagnosis: string; confidence: number; riskLevel: string; detailedResults: { label: string; probability: number }[] };
+  doctorNotes: string;
+  uploadedImage: string | null;
+}) {
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const H = 297;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  const riskColor: Record<string, [number, number, number]> = {
+    High: [220, 53, 69],
+    Moderate: [255, 152, 0],
+    Low: [40, 167, 69],
+  };
+  const rc = riskColor[params.mockPrediction.riskLevel] ?? [100, 100, 100];
+
+  // ── Page 1 ────────────────────────────────────────────────────────────────
+
+  // Deep navy header block
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, W, 52, 'F');
+
+  // Accent gradient strip
+  doc.setFillColor(59, 130, 246);
+  doc.rect(0, 52, W, 3, 'F');
+
+  // Header logo circle
+  doc.setFillColor(59, 130, 246);
+  doc.circle(20, 22, 9, 'F');
+  doc.setFillColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('AI', 16.5, 25.5);
+
+  // Title
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('AI MEDICAL DIAGNOSIS REPORT', 34, 19);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(148, 163, 184);
+  doc.text('Powered by Federated Learning & SSL Diagnostics Platform', 34, 26);
+
+  // Header right — date/time
+  doc.setTextColor(203, 213, 225);
+  doc.setFontSize(8);
+  doc.text(`Generated: ${dateStr}  ${timeStr}`, W - 12, 19, { align: 'right' });
+  doc.text(`Report ID: RPT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`, W - 12, 26, { align: 'right' });
+
+  // Modality badge row
+  doc.setFillColor(30, 41, 59);
+  doc.roundedRect(34, 33, 60, 12, 3, 3, 'F');
+  doc.setTextColor(148, 163, 184);
+  doc.setFontSize(7);
+  doc.text('MODALITY', 38, 38.5);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text(params.selectedModality ?? '—', 38, 43.5);
+
+  doc.setFillColor(30, 41, 59);
+  doc.roundedRect(100, 33, 68, 12, 3, 3, 'F');
+  doc.setTextColor(148, 163, 184);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('AI MODEL', 104, 38.5);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  const modelName = params.selectedModel?.name ?? '—';
+  doc.text(modelName.length > 28 ? modelName.substring(0, 28) + '…' : modelName, 104, 43.5);
+
+  // ── Patient Info Section ──────────────────────────────────────────────────
+  let y = 64;
+
+  // Section header
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, y - 4, W, 10, 'F');
+  doc.setFillColor(59, 130, 246);
+  doc.rect(12, y - 4, 3, 10, 'F');
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PATIENT INFORMATION', 20, y + 3);
+  y += 14;
+
+  // Patient info card
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(12, y, W - 24, 34, 4, 4, 'FD');
+
+  const col1 = 20, col2 = 75, col3 = 130;
+  const labelY = y + 10, valueY = y + 18;
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('PATIENT NAME', col1, labelY);
+  doc.text('AGE / GENDER', col2, labelY);
+  doc.text('MEDICAL ID', col3, labelY);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text(params.patientInfo.name || '—', col1, valueY);
+  doc.text(
+    `${params.patientInfo.age || '—'} yrs${params.patientInfo.gender ? ' / ' + params.patientInfo.gender : ''}`,
+    col2,
+    valueY
+  );
+  doc.setFont('courier', 'bold');
+  doc.text(params.patientInfo.medicalId || '—', col3, valueY);
+
+  // Divider
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.2);
+  doc.line(col2 - 5, y + 6, col2 - 5, y + 28);
+  doc.line(col3 - 5, y + 6, col3 - 5, y + 28);
+
+  // Date row
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7.5);
+  doc.text('ANALYSIS DATE', col1, y + 27);
+  doc.text('STATUS', col2, y + 27);
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(8.5);
+  doc.text(dateStr, col1 + 30, y + 27);
+
+  // Status badge
+  doc.setFillColor(220, 252, 231);
+  doc.roundedRect(col2 + 1, y + 22.5, 28, 7, 2, 2, 'F');
+  doc.setTextColor(22, 101, 52);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COMPLETED', col2 + 3.5, y + 27.5);
+
+  y += 44;
+
+  // ── Diagnosis Result Section ──────────────────────────────────────────────
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, y - 4, W, 10, 'F');
+  doc.setFillColor(99, 102, 241);
+  doc.rect(12, y - 4, 3, 10, 'F');
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DIAGNOSIS RESULTS', 20, y + 3);
+  y += 14;
+
+  // Primary diagnosis card — dark
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(12, y, 85, 50, 4, 4, 'F');
+
+  doc.setFillColor(59, 130, 246);
+  doc.roundedRect(16, y + 6, 25, 7, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRIMARY DIAGNOSIS', 18, y + 11.5);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  const diagText = params.mockPrediction.diagnosis;
+  doc.text(diagText, 16, y + 28);
+
+  doc.setTextColor(148, 163, 184);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Confidence Score', 16, y + 37);
+
+  // Confidence bar bg
+  doc.setFillColor(30, 41, 59);
+  doc.roundedRect(16, y + 39, 77, 5, 2, 2, 'F');
+  // Confidence bar fill
+  doc.setFillColor(59, 130, 246);
+  doc.roundedRect(16, y + 39, 77 * (params.mockPrediction.confidence / 100), 5, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${params.mockPrediction.confidence}%`, 16 + 77 * (params.mockPrediction.confidence / 100) - 14, y + 43.5);
+
+  // Risk level card
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(103, y, 95, 50, 4, 4, 'FD');
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('RISK ASSESSMENT', 111, y + 10);
+
+  doc.setFillColor(...rc);
+  doc.roundedRect(111, y + 14, 40, 14, 3, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(params.mockPrediction.riskLevel.toUpperCase(), 113, y + 23.5);
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('MODEL ACCURACY', 111, y + 36);
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(15);
+  doc.setFont('helvetica', 'bold');
+  doc.text(params.selectedModel?.accuracy ?? '—', 111, y + 46);
+
+  y += 60;
+
+  // ── Probability Breakdown ──────────────────────────────────────────────────
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, y - 4, W, 10, 'F');
+  doc.setFillColor(16, 185, 129);
+  doc.rect(12, y - 4, 3, 10, 'F');
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PROBABILITY BREAKDOWN', 20, y + 3);
+  y += 14;
+
+  const barColors: [number, number, number][] = [
+    [59, 130, 246],
+    [100, 116, 139],
+    [148, 163, 184],
+  ];
+
+  params.mockPrediction.detailedResults.forEach((result, i) => {
+    const bx = 12, bw = W - 24;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(bx, y, bw, 18, 3, 3, 'FD');
+
+    // Label
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', i === 0 ? 'bold' : 'normal');
+    doc.text(result.label, bx + 6, y + 11);
+
+    // Bar track
+    const trackX = bx + 55, trackW = bw - 80, trackH = 5;
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(trackX, y + 7, trackW, trackH, 2, 2, 'F');
+    // Bar fill
+    doc.setFillColor(...barColors[Math.min(i, barColors.length - 1)]);
+    doc.roundedRect(trackX, y + 7, trackW * (result.probability / 100), trackH, 2, 2, 'F');
+
+    // Percentage
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${result.probability}%`, bx + bw - 6, y + 12, { align: 'right' });
+
+    y += 22;
+  });
+
+  y += 6;
+
+  // ── Medical Image (if provided) ─────────────────────────────────────────
+  if (params.uploadedImage && y < 210) {
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, y - 4, W, 10, 'F');
+    doc.setFillColor(168, 85, 247);
+    doc.rect(12, y - 4, 3, 10, 'F');
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MEDICAL IMAGE', 20, y + 3);
+    y += 12;
+
+    try {
+      const imgH = Math.min(60, H - y - 20);
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(12, y, W - 24, imgH + 4, 4, 4, 'D');
+      doc.addImage(params.uploadedImage, 'JPEG', 14, y + 2, W - 28, imgH, undefined, 'FAST');
+      y += imgH + 10;
+    } catch (_) {
+      // silently skip if image can't be embedded
+      y += 8;
+    }
+  }
+
+  // ── Clinical Notes ────────────────────────────────────────────────────────
+  if (params.doctorNotes.trim()) {
+    if (y > 230) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, y - 4, W, 10, 'F');
+    doc.setFillColor(245, 158, 11);
+    doc.rect(12, y - 4, 3, 10, 'F');
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CLINICAL NOTES', 20, y + 3);
+    y += 14;
+
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    const noteLines = doc.splitTextToSize(params.doctorNotes, W - 36);
+    const noteH = Math.max(24, noteLines.length * 5.5 + 12);
+    doc.roundedRect(12, y, W - 24, noteH, 4, 4, 'FD');
+    doc.setTextColor(51, 65, 85);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(noteLines, 18, y + 10);
+    y += noteH + 10;
+  }
+
+  // ── AI Explainability ──────────────────────────────────────────────────────
+  if (y > 240) {
+    doc.addPage();
+    y = 20;
+  }
+
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, y - 4, W, 10, 'F');
+  doc.setFillColor(239, 68, 68);
+  doc.rect(12, y - 4, 3, 10, 'F');
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('AI EXPLAINABILITY SUMMARY', 20, y + 3);
+  y += 14;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  const explainText = `The AI model identified suspicious regions in the ${(params.selectedModality ?? '').toLowerCase()} image with high confidence (${params.mockPrediction.confidence}%). The analysis focused on texture abnormalities and density variations typical of ${params.mockPrediction.diagnosis.toLowerCase()}. Grad-CAM visualization confirmed the model's attention was concentrated on clinically relevant anatomical areas. The prediction aligns with established diagnostic criteria for this condition.`;
+  const explainLines = doc.splitTextToSize(explainText, W - 36);
+  const explainH = explainLines.length * 5.5 + 12;
+  doc.roundedRect(12, y, W - 24, explainH, 4, 4, 'FD');
+
+  // Light amber background for the explainability box
+  doc.setFillColor(255, 251, 235);
+  doc.roundedRect(12, y, W - 24, explainH, 4, 4, 'F');
+  doc.setDrawColor(251, 191, 36);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(12, y, W - 24, explainH, 4, 4, 'D');
+
+  doc.setTextColor(92, 61, 0);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(explainLines, 18, y + 10);
+  y += explainH + 12;
+
+  // ── Disclaimer ────────────────────────────────────────────────────────────
+  if (y > 260) {
+    doc.addPage();
+    y = 20;
+  }
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(12, y, W - 24, 22, 3, 3, 'FD');
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('⚠  IMPORTANT MEDICAL DISCLAIMER', 16, y + 7);
+  doc.setFont('helvetica', 'normal');
+  const disclaimer = 'This AI-generated report is intended to assist qualified healthcare professionals and should not replace clinical judgment. All findings must be reviewed and validated by a licensed physician before any medical decisions are made. This report is confidential and intended solely for the treating physician.';
+  const discLines = doc.splitTextToSize(disclaimer, W - 36);
+  doc.text(discLines, 16, y + 13);
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  const footerY = H - 12;
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, footerY - 4, W, 16, 'F');
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('AI Medical Diagnostics Platform  •  Federated Learning & SSL', 12, footerY + 4);
+  doc.setTextColor(59, 130, 246);
+  doc.text(`Page 1 of ${doc.getNumberOfPages()}`, W - 12, footerY + 4, { align: 'right' });
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const safeName = (params.patientInfo.name || 'patient').replace(/\s+/g, '_');
+  const safeDate = now.toISOString().split('T')[0];
+  doc.save(`MedReport_${safeName}_${safeDate}.pdf`);
 }
 
 // ── Custom SVG Medical Icons ──────────────────────────────────────────────────
@@ -93,8 +517,6 @@ function RetinalOCTIcon({ className }: { className?: string }) {
       <line x1="37" y1="25" x2="39" y2="27" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       <line x1="25" y1="39" x2="27" y2="37" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       <line x1="37" y1="39" x2="39" y2="37" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-      <path d="M32 10 L32 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2" opacity="0.6"/>
-      <path d="M32 48 L32 54" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2" opacity="0.6"/>
       <circle cx="28" cy="28" r="2" fill="currentColor" opacity="0.5"/>
     </svg>
   );
@@ -124,18 +546,25 @@ export function DiagnosisTool() {
   const [selectedModality, setSelectedModality] = useState<Modality>(null);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [patientInfo, setPatientInfo] = useState({ name: '', age: '', gender: '', medicalId: '' });
+  const [patientInfo, setPatientInfo] = useState({
+    name: '',
+    age: '',
+    gender: '',
+    medicalId: generatePatientId(),
+  });
+  const [ageError, setAgeError] = useState('');
   const [doctorNotes, setDoctorNotes] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const steps = [
-    { number: 1, title: 'Choose Modality', icon: Target },
-    { number: 2, title: 'Select Model', icon: Brain },
-    { number: 3, title: 'Patient Info', icon: User },
-    { number: 4, title: 'Upload Image', icon: Upload },
-    { number: 5, title: 'AI Analysis', icon: Sparkles },
-    { number: 6, title: 'Explainability', icon: Eye },
-    { number: 7, title: 'Review & Export', icon: FileText },
+    { number: 1, title: 'Modality', icon: Target },
+    { number: 2, title: 'Model', icon: Brain },
+    { number: 3, title: 'Patient', icon: User },
+    { number: 4, title: 'Upload', icon: Upload },
+    { number: 5, title: 'Analysis', icon: Sparkles },
+    { number: 6, title: 'Explain', icon: Eye },
+    { number: 7, title: 'Export', icon: FileText },
   ];
 
   const modalities = [
@@ -220,6 +649,22 @@ export function DiagnosisTool() {
     }
   };
 
+  const handleAgeChange = (value: string) => {
+    const stripped = value.replace(/[^0-9]/g, '');
+    setPatientInfo({ ...patientInfo, age: stripped });
+    if (stripped === '') { setAgeError(''); return; }
+    const num = parseInt(stripped, 10);
+    if (num <= 0) setAgeError('Age must be greater than 0');
+    else if (num > 130) setAgeError('Age must be 130 or less');
+    else setAgeError('');
+  };
+
+  const isAgeValid = () => {
+    if (!patientInfo.age) return false;
+    const num = parseInt(patientInfo.age, 10);
+    return Number.isInteger(num) && num > 0 && num <= 130;
+  };
+
   const runAnalysis = () => {
     setIsAnalyzing(true);
     setTimeout(() => {
@@ -230,61 +675,104 @@ export function DiagnosisTool() {
   };
 
   const mockPrediction = {
-    diagnosis: selectedModality === 'Chest X-Ray' ? 'Pneumonia' :
-               selectedModality === 'Brain MRI' ? 'Glioma' :
-               selectedModality === 'Retinal OCT' ? 'Diabetic Macular Edema' : 'Melanoma',
+    diagnosis:
+      selectedModality === 'Chest X-Ray' ? 'Pneumonia'
+      : selectedModality === 'Brain MRI' ? 'Glioma'
+      : selectedModality === 'Retinal OCT' ? 'Diabetic Macular Edema'
+      : 'Melanoma',
     confidence: 97.2,
     riskLevel: 'Moderate',
     detailedResults: [
-      { label: selectedModality === 'Chest X-Ray' ? 'Pneumonia' : selectedModality === 'Brain MRI' ? 'Glioma' : selectedModality === 'Retinal OCT' ? 'DME' : 'Melanoma', probability: 97.2 },
+      {
+        label: selectedModality === 'Chest X-Ray' ? 'Pneumonia'
+          : selectedModality === 'Brain MRI' ? 'Glioma'
+          : selectedModality === 'Retinal OCT' ? 'DME'
+          : 'Melanoma',
+        probability: 97.2,
+      },
       { label: 'Normal', probability: 2.1 },
-      { label: selectedModality === 'Chest X-Ray' ? 'Tuberculosis' : selectedModality === 'Brain MRI' ? 'Meningioma' : selectedModality === 'Retinal OCT' ? 'Drusen' : 'Benign', probability: 0.7 },
-    ]
+      {
+        label: selectedModality === 'Chest X-Ray' ? 'Tuberculosis'
+          : selectedModality === 'Brain MRI' ? 'Meningioma'
+          : selectedModality === 'Retinal OCT' ? 'Drusen'
+          : 'Benign',
+        probability: 0.7,
+      },
+    ],
+  };
+
+  const handleExportPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      await generateMedicalReport({
+        patientInfo,
+        selectedModality,
+        selectedModel,
+        mockPrediction,
+        doctorNotes,
+        uploadedImage,
+      });
+      toast.success('PDF report downloaded!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const canProceed = () => {
     if (currentStep === 1) return selectedModality !== null;
     if (currentStep === 2) return selectedModel !== null;
-    if (currentStep === 3) return patientInfo.name && patientInfo.age && patientInfo.medicalId;
+    if (currentStep === 3) return patientInfo.name && isAgeValid();
     if (currentStep === 4) return uploadedImage !== null;
     return true;
   };
 
   return (
     <div className="space-y-6">
-      {/* Progress Bar */}
+      {/* ── Progress Bar ── */}
       <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky top-20 z-30">
-        <CardContent className="pt-6 pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">AI Diagnosis Workflow</h2>
-            <Badge className="bg-blue-100 text-blue-700 border-0">Step {currentStep} of 7</Badge>
+        <CardContent className="pt-5 pb-5 px-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">AI Diagnosis Workflow</h2>
+            <Badge className="bg-blue-100 text-blue-700 border-0 text-xs px-3 py-1">
+              Step {currentStep} / 7 — {steps[currentStep - 1].title}
+            </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             {steps.map((step, index) => (
-              <div key={step.number} className="flex items-center flex-1">
-                <div className={`flex flex-col items-center flex-1 ${index < steps.length - 1 ? 'relative' : ''}`}>
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                    currentStep === step.number
-                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg scale-110'
-                      : currentStep > step.number
-                      ? 'bg-green-500'
-                      : 'bg-gray-200 dark:bg-slate-700'
-                  }`}>
+              <div key={step.number} className="flex items-center" style={{ flex: index < steps.length - 1 ? '1 1 0%' : '0 0 auto' }}>
+                <div className="flex flex-col items-center gap-1.5" style={{ minWidth: 40 }}>
+                  <button
+                    type="button"
+                    onClick={() => currentStep > step.number && setCurrentStep(step.number)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none ${
+                      currentStep === step.number
+                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md ring-4 ring-blue-100 dark:ring-blue-900/40 scale-110'
+                        : currentStep > step.number
+                        ? 'bg-green-500 cursor-pointer hover:bg-green-600'
+                        : 'bg-gray-200 dark:bg-slate-700 cursor-default'
+                    }`}
+                    disabled={currentStep <= step.number}
+                  >
                     {currentStep > step.number ? (
-                      <CheckCircle className="w-5 h-5 text-white" />
+                      <CheckCircle className="w-4 h-4 text-white" />
                     ) : (
-                      <step.icon className={`w-5 h-5 ${currentStep >= step.number ? 'text-white' : 'text-gray-400'}`} />
+                      <step.icon className={`w-4 h-4 ${currentStep >= step.number ? 'text-white' : 'text-gray-400 dark:text-gray-500'}`} />
                     )}
-                  </div>
-                  <p className={`text-xs mt-2 text-center hidden md:block ${
-                    currentStep === step.number ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
-                  }`}>{step.title}</p>
-                  {index < steps.length - 1 && (
-                    <div className={`absolute top-5 left-1/2 w-full h-0.5 ${
-                      currentStep > step.number ? 'bg-green-500' : 'bg-gray-200 dark:bg-slate-700'
-                    }`} style={{ transform: 'translateY(-50%)' }}></div>
-                  )}
+                  </button>
+                  <span className={`text-[10px] font-medium leading-none text-center whitespace-nowrap ${
+                    currentStep === step.number ? 'text-blue-600 dark:text-blue-400'
+                    : currentStep > step.number ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                  }`}>{step.title}</span>
                 </div>
+                {index < steps.length - 1 && (
+                  <div className="flex-1 h-0.5 mx-1 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700">
+                    <div className="h-full bg-green-500 transition-all duration-500" style={{ width: currentStep > step.number ? '100%' : '0%' }} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -294,47 +782,25 @@ export function DiagnosisTool() {
       {/* Step Content */}
       <div className="min-h-[600px]">
 
-        {/* ── Step 1: Choose Modality ── */}
+        {/* ── Step 1 ── */}
         {currentStep === 1 && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="text-center max-w-2xl mx-auto">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-3">
-                Choose Imaging Modality
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                Select the type of medical scan you want to analyze with AI-powered diagnosis
-              </p>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-3">Choose Imaging Modality</h2>
+              <p className="text-gray-600 dark:text-gray-400">Select the type of medical scan you want to analyze with AI-powered diagnosis</p>
             </div>
-
             <div className="grid md:grid-cols-2 gap-5 max-w-5xl mx-auto">
               {modalities.map((modality) => {
                 const isSelected = selectedModality === modality.name;
                 const { Icon } = modality;
                 return (
-                  <div
-                    key={modality.name}
-                    onClick={() => setSelectedModality(modality.name as Modality)}
-                    className="group relative cursor-pointer"
-                  >
-                    {/* Ambient glow */}
+                  <div key={modality.name} onClick={() => setSelectedModality(modality.name as Modality)} className="group relative cursor-pointer">
                     <div className={`absolute -inset-1 bg-gradient-to-r ${modality.gradient} rounded-3xl blur-lg transition-all duration-500 ${isSelected ? 'opacity-25' : 'opacity-0 group-hover:opacity-15'}`} />
-
-                    <div className={`relative rounded-2xl border-2 transition-all duration-300 overflow-hidden ${
-                      isSelected
-                        ? `${modality.borderSelected} ${modality.bgSelected} shadow-xl`
-                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-lg'
-                    }`}>
-                      {/* Top accent bar */}
+                    <div className={`relative rounded-2xl border-2 transition-all duration-300 overflow-hidden ${isSelected ? `${modality.borderSelected} ${modality.bgSelected} shadow-xl` : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-lg'}`}>
                       <div className={`h-1 w-full bg-gradient-to-r ${modality.gradient} transition-all duration-300 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'}`} />
-
                       <div className="p-6">
                         <div className="flex items-start gap-5">
-                          {/* Icon */}
-                          <div className={`relative flex-shrink-0 w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-lg ${
-                            isSelected
-                              ? `bg-gradient-to-br ${modality.gradient}`
-                              : `bg-gray-50 dark:bg-slate-700/80 group-hover:bg-gradient-to-br group-hover:${modality.gradient}`
-                          }`}>
+                          <div className={`relative flex-shrink-0 w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-lg ${isSelected ? `bg-gradient-to-br ${modality.gradient}` : `bg-gray-50 dark:bg-slate-700/80 group-hover:bg-gradient-to-br group-hover:${modality.gradient}`}`}>
                             <Icon className={`w-11 h-11 transition-colors duration-300 ${isSelected ? 'text-white' : `${modality.iconColor} group-hover:text-white`}`} />
                             {isSelected && (
                               <div className="absolute -top-2 -right-2 w-7 h-7 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center ring-2 ring-green-400 shadow-md">
@@ -342,51 +808,26 @@ export function DiagnosisTool() {
                               </div>
                             )}
                           </div>
-
-                          {/* Text */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2 mb-1">
-                              <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
-                                {modality.name}
-                              </h3>
-                              <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${modality.badgeClass}`}>
-                                {modality.stat}
-                              </span>
+                              <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{modality.name}</h3>
+                              <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${modality.badgeClass}`}>{modality.stat}</span>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 leading-snug">
-                              {modality.description}
-                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 leading-snug">{modality.description}</p>
                             <div className="flex flex-wrap gap-1.5">
-                              {modality.tags.map(tag => (
-                                <span
-                                  key={tag}
-                                  className={`text-xs px-2 py-0.5 rounded-md font-medium border transition-colors duration-200 ${
-                                    isSelected
-                                      ? `${modality.badgeClass} border-current/20`
-                                      : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600'
-                                  }`}
-                                >
-                                  {tag}
-                                </span>
+                              {modality.tags.map((tag) => (
+                                <span key={tag} className={`text-xs px-2 py-0.5 rounded-md font-medium border transition-colors duration-200 ${isSelected ? `${modality.badgeClass} border-current/20` : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600'}`}>{tag}</span>
                               ))}
                             </div>
                           </div>
                         </div>
                       </div>
-
-                      {/* Bottom strip */}
-                      <div className={`px-6 py-3 border-t transition-colors duration-300 flex items-center justify-between ${
-                        isSelected
-                          ? 'border-current/10 bg-white/40 dark:bg-black/10'
-                          : 'border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/30'
-                      }`}>
+                      <div className={`px-6 py-3 border-t transition-colors duration-300 flex items-center justify-between ${isSelected ? 'border-current/10 bg-white/40 dark:bg-black/10' : 'border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/30'}`}>
                         <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                           <Brain className={`w-3.5 h-3.5 ${isSelected ? modality.iconColor : 'text-gray-400'}`} />
                           {modelsByModality[modality.name]?.length} AI models available
                         </span>
-                        <span className={`text-xs font-semibold flex items-center gap-1 transition-all duration-300 ${
-                          isSelected ? modality.iconColor : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'
-                        }`}>
+                        <span className={`text-xs font-semibold flex items-center gap-1 transition-all duration-300 ${isSelected ? modality.iconColor : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`}>
                           {isSelected ? 'Selected ✓' : 'Select →'}
                         </span>
                       </div>
@@ -398,7 +839,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* ── Step 2: Select Model ── */}
+        {/* ── Step 2 ── */}
         {currentStep === 2 && selectedModality && (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -407,15 +848,7 @@ export function DiagnosisTool() {
             </div>
             <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               {modelsByModality[selectedModality].map((model) => (
-                <Card
-                  key={model.id}
-                  className={`border-2 cursor-pointer transition-all duration-300 hover:shadow-xl ${
-                    selectedModel?.id === model.id
-                      ? 'border-blue-500 shadow-xl bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur'
-                  }`}
-                  onClick={() => setSelectedModel(model)}
-                >
+                <Card key={model.id} className={`border-2 cursor-pointer transition-all duration-300 hover:shadow-xl ${selectedModel?.id === model.id ? 'border-blue-500 shadow-xl bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur'}`} onClick={() => setSelectedModel(model)}>
                   <CardContent className="pt-6 pb-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -424,11 +857,7 @@ export function DiagnosisTool() {
                         </div>
                         <div>
                           <h3 className="font-bold text-gray-900 dark:text-white">{model.name}</h3>
-                          <Badge className={`mt-1 ${
-                            model.status === 'Clinical Approved'
-                              ? 'bg-green-100 text-green-700 border-green-300'
-                              : 'bg-amber-100 text-amber-700 border-amber-300'
-                          } border`}>
+                          <Badge className={`mt-1 ${model.status === 'Clinical Approved' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-amber-100 text-amber-700 border-amber-300'} border`}>
                             {model.status === 'Clinical Approved' ? <Shield className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
                             {model.status}
                           </Badge>
@@ -447,7 +876,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* ── Step 3: Patient Info ── */}
+        {/* ── Step 3 ── */}
         {currentStep === 3 && (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="text-center mb-8">
@@ -457,34 +886,36 @@ export function DiagnosisTool() {
             <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur">
               <CardContent className="pt-8 pb-8">
                 <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="name" className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-500" />Patient Name
-                    </Label>
-                    <Input id="name" placeholder="John Doe" value={patientInfo.name} onChange={(e) => setPatientInfo({ ...patientInfo, name: e.target.value })} className="h-12" />
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="name" className="flex items-center gap-2"><User className="w-4 h-4 text-gray-500" />Patient Name <span className="text-red-500">*</span></Label>
+                    <Input id="name" placeholder="Full name" value={patientInfo.name} onChange={(e) => setPatientInfo({ ...patientInfo, name: e.target.value })} className="h-12" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="age" className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-500" />Age
-                    </Label>
-                    <Input id="age" type="number" placeholder="45" value={patientInfo.age} onChange={(e) => setPatientInfo({ ...patientInfo, age: e.target.value })} className="h-12" />
+                    <Label htmlFor="age" className="flex items-center gap-2"><Calendar className="w-4 h-4 text-gray-500" />Age <span className="text-red-500">*</span></Label>
+                    <Input id="age" inputMode="numeric" placeholder="e.g. 45" value={patientInfo.age} onChange={(e) => handleAgeChange(e.target.value)} className={`h-12 ${ageError ? 'border-red-400 focus:ring-red-300' : ''}`} />
+                    {ageError && <p className="text-xs text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{ageError}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="gender" className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-500" />Gender
-                    </Label>
-                    <select id="gender" value={patientInfo.gender} onChange={(e) => setPatientInfo({ ...patientInfo, gender: e.target.value })} className="w-full h-12 px-3 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white">
-                      <option value="">Select Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <Label className="flex items-center gap-2"><User className="w-4 h-4 text-gray-500" />Gender</Label>
+                    <div className="flex gap-3 h-12 items-center">
+                      {(['Male', 'Female'] as const).map((g) => (
+                        <button key={g} type="button" onClick={() => setPatientInfo({ ...patientInfo, gender: g })} className={`flex-1 h-12 rounded-lg border-2 text-sm font-semibold transition-all duration-200 ${patientInfo.gender === g ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-slate-500'}`}>
+                          {g === 'Male' ? '♂ Male' : '♀ Female'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="medicalId" className="flex items-center gap-2">
                       <Hash className="w-4 h-4 text-gray-500" />Medical ID
+                      <span className="ml-auto text-xs text-gray-400 font-normal">Auto-generated — edit if needed</span>
                     </Label>
-                    <Input id="medicalId" placeholder="P-001234" value={patientInfo.medicalId} onChange={(e) => setPatientInfo({ ...patientInfo, medicalId: e.target.value })} className="h-12" />
+                    <div className="flex gap-2">
+                      <Input id="medicalId" placeholder="P-XX00000" value={patientInfo.medicalId} onChange={(e) => setPatientInfo({ ...patientInfo, medicalId: e.target.value })} className="h-12 font-mono flex-1" />
+                      <Button type="button" variant="outline" size="icon" className="h-12 w-12 flex-shrink-0" onClick={() => setPatientInfo({ ...patientInfo, medicalId: generatePatientId() })} title="Regenerate ID">
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -492,7 +923,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* ── Step 4: Upload Image ── */}
+        {/* ── Step 4 ── */}
         {currentStep === 4 && (
           <div className="space-y-6 max-w-3xl mx-auto">
             <div className="text-center mb-8">
@@ -520,15 +951,11 @@ export function DiagnosisTool() {
                   <div className="space-y-4">
                     <div className="relative rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700">
                       <img src={uploadedImage} alt="Uploaded" className="w-full h-96 object-contain" />
-                      <Badge className="absolute top-4 right-4 bg-green-500 text-white border-0 shadow-lg">
-                        <CheckCircle className="w-3 h-3 mr-1" />Image Uploaded
-                      </Badge>
+                      <Badge className="absolute top-4 right-4 bg-green-500 text-white border-0 shadow-lg"><CheckCircle className="w-3 h-3 mr-1" />Image Uploaded</Badge>
                     </div>
                     <div className="flex gap-3">
                       <Button variant="outline" className="flex-1" onClick={() => setUploadedImage(null)}>Change Image</Button>
-                      <Button className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600" onClick={runAnalysis}>
-                        <Zap className="w-4 h-4 mr-2" />Start Analysis
-                      </Button>
+                      <Button className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600" onClick={runAnalysis}><Zap className="w-4 h-4 mr-2" />Start Analysis</Button>
                     </div>
                   </div>
                 )}
@@ -537,7 +964,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* ── Step 5: AI Prediction ── */}
+        {/* ── Step 5 ── */}
         {currentStep === 5 && (
           <div className="space-y-6">
             {isAnalyzing ? (
@@ -568,9 +995,7 @@ export function DiagnosisTool() {
                         <p className="text-blue-100 mb-6">Confidence: {mockPrediction.confidence}%</p>
                         <div className="bg-white/10 backdrop-blur rounded-lg p-4">
                           <p className="text-sm mb-2">Risk Level</p>
-                          <Badge className={`${mockPrediction.riskLevel === 'High' ? 'bg-red-500' : mockPrediction.riskLevel === 'Moderate' ? 'bg-amber-500' : 'bg-green-500'} text-white border-0 text-lg px-4 py-2`}>
-                            {mockPrediction.riskLevel}
-                          </Badge>
+                          <Badge className={`${mockPrediction.riskLevel === 'High' ? 'bg-red-500' : mockPrediction.riskLevel === 'Moderate' ? 'bg-amber-500' : 'bg-green-500'} text-white border-0 text-lg px-4 py-2`}>{mockPrediction.riskLevel}</Badge>
                         </div>
                       </div>
                     </CardContent>
@@ -599,7 +1024,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* ── Step 6: Explainability ── */}
+        {/* ── Step 6 ── */}
         {currentStep === 6 && (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -619,9 +1044,7 @@ export function DiagnosisTool() {
                 <CardContent className="pt-6 pb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-gray-900 dark:text-white">Grad-CAM Heatmap</h3>
-                    <Badge className="bg-purple-100 text-purple-700 border-0">
-                      <Eye className="w-3 h-3 mr-1" />AI Focus Areas
-                    </Badge>
+                    <Badge className="bg-purple-100 text-purple-700 border-0"><Eye className="w-3 h-3 mr-1" />AI Focus Areas</Badge>
                   </div>
                   <div className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-slate-700">
                     <img src={uploadedImage || ''} alt="Heatmap" className="w-full h-80 object-contain opacity-60" />
@@ -635,20 +1058,16 @@ export function DiagnosisTool() {
             </div>
             <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur">
               <CardContent className="pt-6 pb-6">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5 text-amber-500" />Clinical Explanation
-                </h3>
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Lightbulb className="w-5 h-5 text-amber-500" />Clinical Explanation</h3>
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                  The AI model identified suspicious regions in the {selectedModality?.toLowerCase()} image with high confidence.
-                  The highlighted areas (shown in red) indicate potential {mockPrediction.diagnosis.toLowerCase()} patterns.
-                  The model focused primarily on texture abnormalities and density variations typical of this condition.
+                  The AI model identified suspicious regions in the {selectedModality?.toLowerCase()} image with high confidence. The highlighted areas (shown in red) indicate potential {mockPrediction.diagnosis.toLowerCase()} patterns. The model focused primarily on texture abnormalities and density variations typical of this condition.
                 </p>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* ── Step 7: Review & Export ── */}
+        {/* ── Step 7 ── */}
         {currentStep === 7 && (
           <div className="space-y-6 max-w-4xl mx-auto">
             <div className="text-center mb-8">
@@ -657,9 +1076,7 @@ export function DiagnosisTool() {
             </div>
             <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur">
               <CardContent className="pt-6 pb-6">
-                <Label htmlFor="notes" className="flex items-center gap-2 mb-3">
-                  <FileText className="w-4 h-4 text-gray-500" />Clinical Notes
-                </Label>
+                <Label htmlFor="notes" className="flex items-center gap-2 mb-3"><FileText className="w-4 h-4 text-gray-500" />Clinical Notes</Label>
                 <Textarea id="notes" placeholder="Enter your clinical observations and recommendations..." value={doctorNotes} onChange={(e) => setDoctorNotes(e.target.value)} rows={6} className="resize-none" />
               </CardContent>
             </Card>
@@ -667,8 +1084,8 @@ export function DiagnosisTool() {
               <CardContent className="pt-6 pb-6">
                 <h3 className="font-bold text-gray-900 dark:text-white mb-4">Analysis Summary</h3>
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
-                  <div><p className="text-gray-600 dark:text-gray-400">Patient</p><p className="font-semibold text-gray-900 dark:text-white">{patientInfo.name} ({patientInfo.age}y)</p></div>
-                  <div><p className="text-gray-600 dark:text-gray-400">Medical ID</p><p className="font-semibold text-gray-900 dark:text-white">{patientInfo.medicalId}</p></div>
+                  <div><p className="text-gray-600 dark:text-gray-400">Patient</p><p className="font-semibold text-gray-900 dark:text-white">{patientInfo.name} ({patientInfo.age}y{patientInfo.gender ? `, ${patientInfo.gender}` : ''})</p></div>
+                  <div><p className="text-gray-600 dark:text-gray-400">Medical ID</p><p className="font-semibold text-gray-900 dark:text-white font-mono">{patientInfo.medicalId}</p></div>
                   <div><p className="text-gray-600 dark:text-gray-400">Modality</p><p className="font-semibold text-gray-900 dark:text-white">{selectedModality}</p></div>
                   <div><p className="text-gray-600 dark:text-gray-400">AI Model</p><p className="font-semibold text-gray-900 dark:text-white">{selectedModel?.name}</p></div>
                   <div><p className="text-gray-600 dark:text-gray-400">Diagnosis</p><p className="font-semibold text-gray-900 dark:text-white">{mockPrediction.diagnosis}</p></div>
@@ -677,8 +1094,17 @@ export function DiagnosisTool() {
               </CardContent>
             </Card>
             <div className="grid md:grid-cols-3 gap-4">
-              <Button size="lg" className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700" onClick={() => toast.success('Generating PDF report...')}>
-                <Download className="w-5 h-5 mr-2" />Export PDF
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 disabled:opacity-70"
+                onClick={handleExportPDF}
+                disabled={isGeneratingPDF}
+              >
+                {isGeneratingPDF ? (
+                  <><RefreshCw className="w-5 h-5 mr-2 animate-spin" />Generating...</>
+                ) : (
+                  <><Download className="w-5 h-5 mr-2" />Export PDF</>
+                )}
               </Button>
               <Button size="lg" className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700" onClick={() => toast.success('Saved to case history!')}>
                 <Save className="w-5 h-5 mr-2" />Save to History
@@ -691,7 +1117,7 @@ export function DiagnosisTool() {
         )}
       </div>
 
-      {/* Navigation Buttons */}
+      {/* ── Navigation ── */}
       <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky bottom-4 z-30">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-between">
@@ -701,8 +1127,8 @@ export function DiagnosisTool() {
             <Button
               size="lg"
               onClick={() => {
-                if (currentStep === 4 && uploadedImage) { runAnalysis(); }
-                else { setCurrentStep(Math.min(7, currentStep + 1)); }
+                if (currentStep === 4 && uploadedImage) runAnalysis();
+                else setCurrentStep(Math.min(7, currentStep + 1));
               }}
               disabled={!canProceed()}
               className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
