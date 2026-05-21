@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router';
 export function Settings() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState({
-    name: 'Dr. Sarah Johnson',
+    name: 'Dr. Hadjer Bouziani',
     email: 'sarah.johnson@hospital.com',
     specialization: 'Radiology',
     licenseNumber: 'MD-123456',

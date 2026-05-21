@@ -35,6 +35,7 @@ import {
 } from './ui/dropdown-menu';
 import { useState } from 'react';
 import { useTheme } from '../context/theme-context';
+import logoImage from './image.png'; // Import your logo image
 
 export function Layout() {
   const location = useLocation();
@@ -79,11 +80,16 @@ export function Layout() {
           {/* Logo & Collapse Toggle */}
           <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200/50 dark:border-slate-700/50">
             <div className={`flex items-center gap-3 transition-all ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/40">
-                <Stethoscope className="w-6 h-6 text-white" />
+              {/* Replace the Stethoscope icon with your logo image */}
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
+                <img 
+                  src={logoImage} 
+                  alt="MedFusion AI Logo" 
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div>
-                <h1 className="font-bold text-gray-900 dark:text-white tracking-tight text-lg">MedAI</h1>
+                <h1 className="font-bold text-gray-900 dark:text-white tracking-tight text-lg">MedFusion AI</h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Diagnostics Pro</p>
               </div>
             </div>
@@ -165,7 +171,7 @@ export function Layout() {
                 </Avatar>
                 {!isCollapsed && (
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">Dr. Sarah Johnson</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">Dr. Hadjer Bouziani</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Radiology Specialist</p>
                   </div>
                 )}
@@ -182,11 +188,16 @@ export function Layout() {
             {/* Mobile Sidebar Header */}
             <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200/50 dark:border-slate-700/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <Stethoscope className="w-6 h-6 text-white" />
+                {/* Replace mobile logo icon with your image */}
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={logoImage} 
+                    alt="MedFusion AI Logo" 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
-                  <h1 className="font-bold text-gray-900 dark:text-white">MedAI</h1>
+                  <h1 className="font-bold text-gray-900 dark:text-white">MedFusion AI</h1>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Diagnostics Pro</p>
                 </div>
               </div>
@@ -221,7 +232,7 @@ export function Layout() {
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">SJ</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Dr. Sarah Johnson</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Dr. Hadjer Bouziani</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Radiology</p>
                   </div>
                 </div>
@@ -244,10 +255,15 @@ export function Layout() {
                 <Menu className="w-5 h-5 text-gray-700 dark:text-gray-300" />
               </button>
               <div className="lg:hidden flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <Stethoscope className="w-4 h-4 text-white" />
+                {/* Replace mobile top bar logo */}
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={logoImage} 
+                    alt="MedFusion AI Logo" 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <span className="font-bold text-gray-900 dark:text-white">MedAI</span>
+                <span className="font-bold text-gray-900 dark:text-white">MedFusion AI</span>
               </div>
               
               {/* Breadcrumb */}
@@ -346,7 +362,7 @@ export function Layout() {
                     <Avatar className="w-8 h-8 ring-2 ring-blue-500/30">
                       <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-semibold">SJ</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">Dr. Johnson</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">Dr. Hadjer</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-white/20 dark:border-slate-700/50 shadow-xl w-56">

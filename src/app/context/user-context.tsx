@@ -21,9 +21,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   });
 
   const [user] = useState({
-    name: 'Dr. Sarah Johnson',
-    email: 'sarah.johnson@hospital.com',
-    avatar: 'SJ',
+    name: 'Dr. Hadjer Bouziani',
+    email: 'ha.bouziani.mi@lagh-univ.dz',
+    avatar: 'HB',
   });
 
   const setRole = (newRole: UserRole) => {
