@@ -29,8 +29,8 @@ import { AIInsights } from "./pages/ai-team/ai-insights";
 
 export const router = createBrowserRouter([
   {
-    path: "/",
-    Component: Landing,  // Landing at root path
+    path: "/landing",
+    Component: Landing,
   },
   {
     path: "/login",
@@ -38,7 +38,7 @@ export const router = createBrowserRouter([
   },
   // Doctor Platform
   {
-    path: "/doctor",  // Added /doctor prefix to separate from root
+    path: "/",
     Component: Layout,
     children: [
       { index: true, Component: Dashboard },
@@ -53,7 +53,7 @@ export const router = createBrowserRouter([
       { path: "profile", Component: Profile },
     ],
   },
-  // AI Team Platform
+  // AI Team Platform (Completely Separate)
   {
     path: "/ai",
     Component: AITeamLayout,
