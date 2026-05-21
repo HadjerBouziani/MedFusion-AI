@@ -35,6 +35,7 @@ import {
 } from './ui/dropdown-menu';
 import { useState } from 'react';
 import { useTheme } from '../context/theme-context';
+import logoImage from './image.png'; // Import your logo image
 
 export function AITeamLayout() {
   const location = useLocation();
@@ -79,11 +80,16 @@ export function AITeamLayout() {
           {/* Logo & Collapse Toggle */}
           <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200/50 dark:border-slate-700/50">
             <div className={`flex items-center gap-3 transition-all ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-indigo-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/40">
-                <Network className="w-6 h-6 text-white" />
+              {/* Logo image without shadow */}
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
+                <img 
+                  src={logoImage} 
+                  alt="MedFusion AI Logo" 
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div>
-                <h1 className="font-bold text-gray-900 dark:text-white tracking-tight text-lg">FedMedAI</h1>
+                <h1 className="font-bold text-gray-900 dark:text-white tracking-tight text-lg">MedFusion AI</h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">AI Team Portal</p>
               </div>
             </div>
@@ -173,6 +179,73 @@ export function AITeamLayout() {
         </div>
       </aside>
 
+      {/* Mobile Sidebar Overlay */}
+      {isMobileSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={() => setIsMobileSidebarOpen(false)}>
+          <div className="w-72 h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Mobile Sidebar Header */}
+            <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200/50 dark:border-slate-700/50">
+              <div className="flex items-center gap-3">
+                {/* Logo image without shadow */}
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={logoImage} 
+                    alt="MedFusion AI Logo" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <h1 className="font-bold text-gray-900 dark:text-white">MedFusion AI</h1>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">AI Team Portal</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMobileSidebarOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg">
+                <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
+
+            {/* Mobile Navigation */}
+            <nav className="px-4 py-6 space-y-2">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
+                return (
+                  <Link key={item.path} to={item.path} onClick={() => setIsMobileSidebarOpen(false)}>
+                    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
+                      active ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800'
+                    }`}>
+                      <Icon className="w-5 h-5" />
+                      {item.label}
+                    </div>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Mobile User Section */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200/50 dark:border-slate-700/50 bg-white/95 dark:bg-slate-900/95">
+              <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800">
+                <Avatar className="ring-2 ring-purple-500/30">
+                  <AvatarFallback className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-semibold">AT</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">AI Team Member</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">ML Engineer</p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Link to="/" onClick={() => setIsMobileSidebarOpen(false)}>
+                  <Button variant="outline" className="w-full border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-400">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Switch to Doctor Platform
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className={`flex-1 relative z-10 transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-72'}`}>
         {/* Top Bar */}
@@ -186,10 +259,15 @@ export function AITeamLayout() {
                 <Menu className="w-5 h-5 text-gray-700 dark:text-gray-300" />
               </button>
               <div className="lg:hidden flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <Network className="w-4 h-4 text-white" />
+                {/* Logo image without shadow */}
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={logoImage} 
+                    alt="MedFusion AI Logo" 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <span className="font-bold text-gray-900 dark:text-white">FedMedAI</span>
+                <span className="font-bold text-gray-900 dark:text-white">MedFusion AI</span>
               </div>
 
               {/* Breadcrumb */}
@@ -277,6 +355,30 @@ export function AITeamLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/95 dark:bg-slate-900/95 border-t border-white/30 dark:border-slate-700/50 shadow-2xl">
+        <div className="grid grid-cols-5 gap-1 p-2">
+          {navItems.slice(0, 5).map(item => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+            return (
+              <Link key={item.path} to={item.path}>
+                <button
+                  className={`flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl transition-all ${
+                    active
+                      ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-slate-800 scale-105 shadow-lg shadow-purple-500/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium">{item.label.split(' ')[0]}</span>
+                </button>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
