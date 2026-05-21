@@ -114,473 +114,397 @@ function SkinLesionIcon({ className }: { className?: string }) {
   );
 }
 
-// ── PDF Generator ─────────────────────────────────────────────────────────────
+// ── PDF Generator (FIXED - no emoji, all plain ASCII) ──────────────────────────
 
 async function generateMedicalPDF(data: {
   patientInfo: { name: string; age: string; gender: string; medicalId: string };
-  selectedModality: Modality;
-  selectedModel: Model | null;
+  selectedModality: string;
+  selectedModel: { name: string; accuracy: string } | null;
   uploadedImage: string | null;
-  mockPrediction: { diagnosis: string; confidence: number; riskLevel: string; detailedResults: { label: string; probability: number }[] };
+  mockPrediction: {
+    diagnosis: string;
+    confidence: number;
+    riskLevel: string;
+    detailedResults: { label: string; probability: number }[];
+  };
   doctorNotes: string;
 }) {
-  // Dynamically load jsPDF
-  const jsPDFModule = await import('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' as any);
   const { jsPDF } = (window as any).jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const margin = 12;
-  const contentWidth = pageWidth - margin * 2;
+  // ─── Page constants ────────────────────────────────────────────────────────
+  const PW  = 210;
+  const PH  = 297;
+  const ML  = 16;          // left margin
+  const MR  = 16;          // right margin
+  const CW  = PW - ML - MR; // content width = 178 mm
 
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  const reportId = `RPT-${Math.random().toString(36).toUpperCase().substring(2, 10)}`;
+  // ─── Colour palette ────────────────────────────────────────────────────────
+  type RGB = [number, number, number];
+  const C = {
+    black:       [20,  20,  20]  as RGB,
+    dark:        [51,  65,  85]  as RGB,
+    mid:         [100, 116, 139] as RGB,
+    light:       [226, 232, 240] as RGB,
+    surface:     [248, 250, 252] as RGB,
+    white:       [255, 255, 255] as RGB,
+    blue:        [29,  78, 216]  as RGB,
+    blueSoft:    [219, 234, 254] as RGB,
+    teal:        [13, 148, 136]  as RGB,
+    tealSoft:    [204, 251, 241] as RGB,
+    green:       [22, 163,  74]  as RGB,
+    greenSoft:   [220, 252, 231] as RGB,
+    amber:       [180,  83,   9] as RGB,
+    amberSoft:   [254, 243, 199] as RGB,
+    amberBorder: [253, 211,  77] as RGB,
+    red:         [185,  28,  28] as RGB,
+    redSoft:     [254, 226, 226] as RGB,
+    purple:      [109,  40, 217] as RGB,
+  };
 
-  // ── Colors ──
-  const navy = [10, 25, 60] as [number, number, number];
-  const blue = [37, 99, 235] as [number, number, number];
-  const teal = [13, 148, 136] as [number, number, number];
-  const green = [22, 163, 74] as [number, number, number];
-  const amber = [217, 119, 6] as [number, number, number];
-  const red = [220, 38, 38] as [number, number, number];
-  const lightBlue = [239, 246, 255] as [number, number, number];
-  const lightGray = [248, 250, 252] as [number, number, number];
-  const midGray = [100, 116, 139] as [number, number, number];
-  const darkGray = [30, 41, 59] as [number, number, number];
-  const white = [255, 255, 255] as [number, number, number];
-  const borderGray = [226, 232, 240] as [number, number, number];
+  // ─── Tiny helpers ──────────────────────────────────────────────────────────
+  const f  = (c: RGB) => doc.setFillColor(...c);
+  const s  = (c: RGB) => doc.setDrawColor(...c);
+  const t  = (c: RGB) => doc.setTextColor(...c);
+  const B  = (sz: number) => { doc.setFont("helvetica", "bold");   doc.setFontSize(sz); };
+  const N  = (sz: number) => { doc.setFont("helvetica", "normal"); doc.setFontSize(sz); };
+  const I  = (sz: number) => { doc.setFont("helvetica", "italic"); doc.setFontSize(sz); };
+  const lw = (w: number)  => doc.setLineWidth(w);
 
-  let y = 0;
+  // Horizontal rule full content width
+  const hr = (y: number, col: RGB = C.light, thick = 0.25) => {
+    lw(thick); s(col);
+    doc.line(ML, y, ML + CW, y);
+  };
 
-  // ── HEADER ──
-  doc.setFillColor(...navy);
-  doc.rect(0, 0, pageWidth, 38, 'F');
+  // Small filled rectangle bullet
+  const bullet = (x: number, y: number, col: RGB, sz = 1.4) => {
+    f(col); doc.rect(x, y - sz * 0.8, sz, sz, "F");
+  };
 
-  // Shield icon area
-  doc.setFillColor(255, 255, 255, 0.15);
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(margin, 6, 22, 26, 3, 3, 'S');
+  // Progress bar: track + fill
+  const bar = (x: number, y: number, w: number, pct: number, col: RGB, h = 2.2) => {
+    f(C.light);
+    doc.roundedRect(x, y, w, h, 0.6, 0.6, "F");
+    f(col);
+    doc.roundedRect(x, y, Math.max(0.4, w * Math.min(pct, 100) / 100), h, 0.6, 0.6, "F");
+  };
 
-  // Cross inside shield
-  doc.setDrawColor(...teal);
-  doc.setLineWidth(2);
-  doc.line(margin + 11, 11, margin + 11, 27);
-  doc.line(margin + 4, 19, margin + 18, 19);
+  // Pill / badge
+  const pill = (
+    label: string, cx: number, cy: number,
+    bg: RGB, fg: RGB, pw = 30, ph = 5.5
+  ) => {
+    f(bg); s(bg); lw(0);
+    doc.roundedRect(cx - pw / 2, cy - ph * 0.65, pw, ph, 1.8, 1.8, "F");
+    t(fg); B(6);
+    doc.text(label.toUpperCase(), cx, cy, { align: "center" });
+  };
 
-  // Title
-  doc.setTextColor(...white);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('AI MEDICAL', margin + 27, 15);
-  doc.text('DIAGNOSIS REPORT', margin + 27, 23);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(148, 196, 255);
-  doc.text('Powered by Federated Learning & SSL Diagnostics Platform', margin + 27, 30);
+  // Section heading — left accent stripe + uppercase label + soft rule below
+  const heading = (label: string, y: number): number => {
+    f(C.blue); doc.rect(ML, y - 4, 3, 6, "F");
+    t(C.blue); B(8); doc.text(label.toUpperCase(), ML + 6, y);
+    hr(y + 2.8, C.blueSoft, 0.3);
+    return y + 8; // returns y AFTER the heading (ready for content)
+  };
 
-  // Header right side
-  doc.setTextColor(...white);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`📅 ${dateStr}`, pageWidth - margin - 55, 12);
-  doc.text(`🕐 ${timeStr}`, pageWidth - margin - 55, 19);
-  doc.text(`Report ID: ${reportId}`, pageWidth - margin - 55, 26);
+  // Simple card outline
+  const card = (x: number, y: number, w: number, h: number, fill: RGB = C.white) => {
+    f(fill); s(C.light); lw(0.3);
+    doc.roundedRect(x, y, w, h, 2, 2, "FD");
+  };
 
-  // COMPLETED badge
-  doc.setFillColor(...teal);
-  doc.roundedRect(pageWidth - margin - 30, 30, 26, 6, 2, 2, 'F');
-  doc.setTextColor(...white);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'bold');
-  doc.text('✓ COMPLETED', pageWidth - margin - 28, 34.5);
+  // Card internal sub-header line
+  const cardHeader = (label: string, x: number, y: number, w: number) => {
+    t(C.mid); N(6.5); doc.text(label, x + 4, y + 5.5);
+    lw(0.2); s(C.light); doc.line(x, y + 7.5, x + w, y + 7.5);
+  };
 
-  y = 44;
+  // ─── Date / ID ─────────────────────────────────────────────────────────────
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const timeStr  = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  const reportId = "RPT-" + Math.random().toString(36).toUpperCase().substring(2, 10);
 
-  // ── PATIENT INFO SECTION ──
-  doc.setFillColor(...lightGray);
-  doc.setDrawColor(...borderGray);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, contentWidth, 20, 2, 2, 'FD');
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 1 — HEADER
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Accent top bar
+  f(C.blue); doc.rect(0, 0, PW, 2.5, "F");
 
-  doc.setTextColor(...blue);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('PATIENT', margin + 4, y + 7);
-  doc.text('INFORMATION', margin + 4, y + 12);
+  // Institution breadcrumb
+  t(C.mid); N(6.5);
+  doc.text("AI Medical Diagnostics Platform  ·  Federated Learning & SSL Technology", ML, 9);
 
-  // Patient info columns
-  const cols = [
-    { label: 'PATIENT NAME', value: data.patientInfo.name || 'N/A', x: margin + 32 },
-    { label: 'AGE / GENDER', value: `${data.patientInfo.age || '—'} Years${data.patientInfo.gender ? ` / ${data.patientInfo.gender}` : ''}`, x: margin + 72 },
-    { label: 'MEDICAL ID', value: data.patientInfo.medicalId, x: margin + 115 },
-    { label: 'ANALYSIS DATE', value: dateStr, x: margin + 150 },
+  // Separator under breadcrumb
+  hr(11, C.light, 0.2);
+
+  // Main title
+  t(C.black); B(17);
+  doc.text("Medical Diagnosis Report", ML, 20);
+
+  // Subtitle
+  t(C.mid); I(7.5);
+  doc.text("AI-Assisted Radiological Analysis", ML, 26);
+
+  // Right meta block — labels at fixed column, values indented
+  const metaLX = ML + CW - 58;   // label X
+  const metaVX = metaLX + 20;    // value X
+  const metaRows = [
+    { label: "Date:",      value: dateStr  },
+    { label: "Time:",      value: timeStr  },
+    { label: "Report ID:", value: reportId },
   ];
-
-  cols.forEach(col => {
-    doc.setTextColor(...midGray);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
-    doc.text(col.label, col.x, y + 7);
-    doc.setTextColor(...darkGray);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text(col.value, col.x, y + 14);
+  metaRows.forEach(({ label, value }, i) => {
+    const ry = 20 + i * 5;
+    t(C.mid); N(7); doc.text(label, metaLX, ry);
+    t(C.black); B(7); doc.text(value, metaVX, ry);
   });
 
-  y += 26;
+  // Full-width separator
+  hr(36, C.light, 0.35);
 
-  // ── PRIMARY DIAGNOSIS + PROBABILITY ──
-  const diagBoxH = 56;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 2 — PATIENT INFORMATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  let y = 43;
+  y = heading("Patient Information", y);
+  // y is now the baseline for the first content row
 
-  // Left — Primary Diagnosis (dark blue)
-  doc.setFillColor(...navy);
-  doc.roundedRect(margin, y, contentWidth * 0.52, diagBoxH, 3, 3, 'F');
-
-  doc.setTextColor(...teal);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('PRIMARY DIAGNOSIS', margin + 5, y + 9);
-
-  doc.setTextColor(...white);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.text(data.mockPrediction.diagnosis, margin + 5, y + 24);
-
-  doc.setTextColor(180, 210, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text('CONFIDENCE SCORE', margin + 5, y + 32);
-
-  doc.setTextColor(...teal);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.text(`${data.mockPrediction.confidence}%`, margin + 5, y + 43);
-
-  // Confidence bar
-  const barW = contentWidth * 0.52 * 0.55;
-  doc.setFillColor(255, 255, 255, 0.2);
-  doc.roundedRect(margin + 5, y + 45, barW, 3, 1, 1, 'F');
-  doc.setFillColor(...teal);
-  doc.roundedRect(margin + 5, y + 45, barW * (data.mockPrediction.confidence / 100), 3, 1, 1, 'F');
-
-  // Risk level
-  doc.setTextColor(200, 220, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.text('RISK LEVEL', margin + 5, y + 53);
-  const riskColor: [number, number, number] = data.mockPrediction.riskLevel === 'High' ? red : data.mockPrediction.riskLevel === 'Moderate' ? amber : green;
-  doc.setFillColor(...riskColor);
-  doc.roundedRect(margin + 26, y + 49, 22, 6, 2, 2, 'F');
-  doc.setTextColor(...white);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.text(data.mockPrediction.riskLevel, margin + 30, y + 53.5);
-
-  // Model accuracy
-  doc.setTextColor(200, 220, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.text('MODEL ACCURACY', margin + 65, y + 53);
-  doc.setTextColor(...white);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text(data.selectedModel?.accuracy || '—', margin + 65, y + 48);
-
-  // Right — Probability Breakdown
-  const rightX = margin + contentWidth * 0.52 + 4;
-  const rightW = contentWidth * 0.48 - 4;
-  doc.setFillColor(...white);
-  doc.setDrawColor(...borderGray);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(rightX, y, rightW, diagBoxH, 3, 3, 'FD');
-
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('PROBABILITY BREAKDOWN', rightX + 4, y + 9);
-
-  const probColors: [number, number, number][] = [blue, teal, [139, 92, 246]];
-  data.mockPrediction.detailedResults.forEach((result, i) => {
-    const ry = y + 16 + i * 12;
-    doc.setTextColor(...(probColors[i] || midGray));
-    doc.circle(rightX + 5, ry + 1, 2, 'F');
-    doc.setTextColor(...darkGray);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(result.label, rightX + 10, ry + 2.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${result.probability}%`, rightX + rightW - 14, ry + 2.5);
-
-    // Bar
-    const bW = rightW - 16;
-    doc.setFillColor(...borderGray);
-    doc.roundedRect(rightX + 4, ry + 4, bW, 2.5, 1, 1, 'F');
-    doc.setFillColor(...(probColors[i] || midGray));
-    doc.roundedRect(rightX + 4, ry + 4, bW * (result.probability / 100), 2.5, 1, 1, 'F');
+  const pCols = [
+    { label: "Patient Name",  value: data.patientInfo.name || "N/A"  },
+    { label: "Age / Gender",  value: `${data.patientInfo.age || "—"} yrs  /  ${data.patientInfo.gender || "—"}` },
+    { label: "Medical ID",    value: data.patientInfo.medicalId || "—" },
+    { label: "Analysis Date", value: dateStr },
+  ];
+  const pcw = CW / pCols.length;
+  pCols.forEach(({ label, value }, i) => {
+    const cx = ML + i * pcw;
+    t(C.mid); N(6.5); doc.text(label, cx, y);
+    t(C.black); B(8); doc.text(value, cx, y + 6);
   });
 
-  // Model info box inside right panel
-  doc.setFillColor(...lightBlue);
-  doc.setDrawColor(147, 197, 253);
-  doc.roundedRect(rightX + 4, y + diagBoxH - 14, rightW - 8, 11, 2, 2, 'FD');
-  doc.setTextColor(...blue);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.text('Clinical Approved Model', rightX + 8, y + diagBoxH - 8);
-  doc.setFontSize(6.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(data.selectedModel?.name || '—', rightX + 8, y + diagBoxH - 4.5);
-  doc.setTextColor(...blue);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text(data.selectedModel?.accuracy || '—', rightX + rightW - 20, y + diagBoxH - 5);
-  doc.setFontSize(6);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Accuracy', rightX + rightW - 20, y + diagBoxH - 1.5);
+  y += 16;   // clear label + value + breathing room
+  hr(y, C.light, 0.2);
+  y += 8;
 
-  y += diagBoxH + 6;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 3 — PRIMARY DIAGNOSIS
+  // ═══════════════════════════════════════════════════════════════════════════
+  y = heading("Primary Diagnosis", y);
 
-  // ── IMAGES ROW ──
-  const imgSectionH = 70;
+  const DIAG_H  = 50;                    // card height
+  const diagW   = CW * 0.50;            // left card width
+  const probX   = ML + diagW + 5;
+  const probW   = CW - diagW - 5;
 
-  // Medical Image Box
-  const imgBoxW = contentWidth * 0.34;
-  doc.setFillColor(...white);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(margin, y, imgBoxW, imgSectionH, 2, 2, 'FD');
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('MEDICAL IMAGE', margin + 4, y + 7);
+  // ── Left card: diagnosis ──
+  card(ML, y, diagW, DIAG_H, C.surface);
 
+  t(C.mid); N(6.5);
+  doc.text("Primary Diagnosis", ML + 5, y + 7);
+
+  t(C.black); B(21);
+  doc.text(data.mockPrediction.diagnosis, ML + 5, y + 19);
+
+  lw(0.2); s(C.light);
+  doc.line(ML + 4, y + 22, ML + diagW - 4, y + 22);
+
+  t(C.mid); N(6.5);
+  doc.text("Confidence Score", ML + 5, y + 28);
+
+  t(C.blue); B(15);
+  doc.text(`${data.mockPrediction.confidence}%`, ML + 5, y + 37);
+
+  bar(ML + 5, y + 39, diagW - 10, data.mockPrediction.confidence, C.blue, 2.5);
+
+  // Risk badge — bottom right of card
+  const riskBg: RGB = data.mockPrediction.riskLevel === "High"     ? C.redSoft
+                    : data.mockPrediction.riskLevel === "Moderate"  ? C.amberSoft : C.greenSoft;
+  const riskFg: RGB = data.mockPrediction.riskLevel === "High"     ? C.red
+                    : data.mockPrediction.riskLevel === "Moderate"  ? C.amber     : C.green;
+  pill(
+    data.mockPrediction.riskLevel + " Risk",
+    ML + diagW - 20, y + 7,
+    riskBg, riskFg, 34, 5.5
+  );
+
+  // ── Right card: probability breakdown ──
+  card(probX, y, probW, DIAG_H, C.white);
+  cardHeader("Probability Breakdown", probX, y, probW);
+
+  const probDot: RGB[] = [C.blue, C.teal, C.purple];
+  const itemH = 9.5;                     // vertical spacing per item
+  data.mockPrediction.detailedResults.forEach((r, i) => {
+    const iy = y + 12 + i * itemH;
+    const dc = probDot[i] ?? C.mid;
+
+    // dot
+    f(dc); doc.circle(probX + 5.5, iy + 1.5, 1.8, "F");
+
+    // label
+    t(C.dark); N(7.5); doc.text(r.label, probX + 10, iy + 2.5);
+
+    // percent — right-aligned
+    t(dc); B(7.5);
+    doc.text(`${r.probability}%`, probX + probW - 5, iy + 2.5, { align: "right" });
+
+    // bar
+    bar(probX + 10, iy + 4, probW - 15, r.probability, dc, 2);
+  });
+
+  // Model accuracy strip at bottom of right card
+  const stripY = y + DIAG_H - 9;
+  f(C.blueSoft); lw(0); doc.roundedRect(probX + 4, stripY, probW - 8, 7, 1.5, 1.5, "F");
+  t(C.mid); N(6.5); doc.text("Model Accuracy:", probX + 8, stripY + 4.5);
+  t(C.blue); B(7.5); doc.text(data.selectedModel?.accuracy || "—", probX + probW - 8, stripY + 4.5, { align: "right" });
+
+  y += DIAG_H + 7;
+  hr(y, C.light, 0.2);
+  y += 8;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 4 — IMAGING ANALYSIS
+  // ═══════════════════════════════════════════════════════════════════════════
+  y = heading("Imaging Analysis", y);
+
+  const IMG_H   = 54;
+  const GAP     = 4;
+  const imgW    = (CW - GAP * 2) * 0.29;    // ≈ 50 mm
+  const hmW     = imgW;
+  const expW    = CW - imgW - hmW - GAP * 2; // remaining width
+  const hmX     = ML + imgW + GAP;
+  const expX    = hmX + hmW + GAP;
+
+  // ── Panel: Medical Image ──
+  card(ML, y, imgW, IMG_H);
+  cardHeader("Medical Image", ML, y, imgW);
   if (data.uploadedImage) {
     try {
-      doc.addImage(data.uploadedImage, 'JPEG', margin + 2, y + 10, imgBoxW - 4, imgSectionH - 14, undefined, 'FAST');
+      doc.addImage(data.uploadedImage, "JPEG", ML + 2, y + 9.5, imgW - 4, IMG_H - 12, undefined, "FAST");
     } catch {
-      doc.setFillColor(30, 30, 30);
-      doc.rect(margin + 2, y + 10, imgBoxW - 4, imgSectionH - 14, 'F');
-      doc.setTextColor(...midGray);
-      doc.setFontSize(7);
-      doc.text('[Image]', margin + imgBoxW / 2 - 5, y + imgSectionH / 2 + 5);
+      f(C.surface); doc.rect(ML + 2, y + 9.5, imgW - 4, IMG_H - 12, "F");
+      t(C.mid); N(7);
+      doc.text("[No image]", ML + imgW / 2, y + IMG_H / 2, { align: "center" });
     }
   } else {
-    doc.setFillColor(30, 30, 30);
-    doc.rect(margin + 2, y + 10, imgBoxW - 4, imgSectionH - 14, 'F');
+    f(C.surface); doc.rect(ML + 2, y + 9.5, imgW - 4, IMG_H - 12, "F");
   }
 
-  // Heatmap Box
-  const hmX = margin + imgBoxW + 4;
-  const hmW = contentWidth * 0.34;
-  doc.setFillColor(...white);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(hmX, y, hmW, imgSectionH, 2, 2, 'FD');
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('AI HEATMAP (Grad-CAM)', hmX + 4, y + 7);
-
+  // ── Panel: Heatmap ──
+  card(hmX, y, hmW, IMG_H);
+  cardHeader("AI Heatmap (Grad-CAM)", hmX, y, hmW);
   if (data.uploadedImage) {
     try {
-      doc.addImage(data.uploadedImage, 'JPEG', hmX + 2, y + 10, hmW - 4, imgSectionH - 22, undefined, 'FAST');
-      // Overlay gradient effect (simulated)
-      doc.setFillColor(255, 100, 0, 0.3);
-      doc.roundedRect(hmX + 2, y + 10, (hmW - 4) * 0.4, imgSectionH - 22, 0, 0, 'F');
-      doc.setFillColor(255, 200, 0, 0.2);
-      doc.roundedRect(hmX + 2 + (hmW - 4) * 0.15, y + 15, (hmW - 4) * 0.35, imgSectionH - 35, 0, 0, 'F');
-    } catch {
-      doc.setFillColor(20, 20, 60);
-      doc.rect(hmX + 2, y + 10, hmW - 4, imgSectionH - 22, 'F');
-    }
+      doc.addImage(data.uploadedImage, "JPEG", hmX + 2, y + 9.5, hmW - 4, IMG_H - 20, undefined, "FAST");
+    } catch { /* silent */ }
   } else {
-    doc.setFillColor(20, 20, 60);
-    doc.rect(hmX + 2, y + 10, hmW - 4, imgSectionH - 22, 'F');
+    f(C.surface); doc.rect(hmX + 2, y + 9.5, hmW - 4, IMG_H - 20, "F");
   }
-
-  // Heatmap color scale bar
-  const scaleY = y + imgSectionH - 9;
-  const scaleColors: [number, number, number, string][] = [
-    [0, 0, 128, ''], [0, 100, 255, ''], [0, 200, 200, ''],
-    [0, 255, 0, ''], [255, 255, 0, ''], [255, 150, 0, ''], [255, 0, 0, ''],
+  // colour scale
+  const scY = y + IMG_H - 8.5;
+  const scColors: RGB[] = [
+    [0,0,128],[0,100,255],[0,200,200],[0,200,100],[255,220,0],[255,130,0],[210,38,38],
   ];
-  const scaleSegW = (hmW - 8) / scaleColors.length;
-  scaleColors.forEach(([r, g, b], i) => {
+  const scSegW = (hmW - 8) / scColors.length;
+  scColors.forEach(([r, g, b], i) => {
     doc.setFillColor(r, g, b);
-    doc.rect(hmX + 4 + i * scaleSegW, scaleY, scaleSegW, 2.5, 'F');
+    doc.rect(hmX + 4 + i * scSegW, scY, scSegW, 2.2, "F");
   });
-  doc.setTextColor(...midGray);
-  doc.setFontSize(6);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Low Attention', hmX + 4, scaleY + 6);
-  doc.text('High Attention', hmX + hmW - 28, scaleY + 6);
+  t(C.mid); N(5.5);
+  doc.text("Low", hmX + 4, scY + 5);
+  doc.text("High", hmX + hmW - 10, scY + 5);
 
-  // AI Explainability Box
-  const expX = hmX + hmW + 4;
-  const expW = contentWidth - imgBoxW - hmW - 8;
-  doc.setFillColor(...white);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(expX, y, expW, imgSectionH, 2, 2, 'FD');
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('AI EXPLAINABILITY', expX + 4, y + 7);
+  // ── Panel: AI Explainability ──
+  card(expX, y, expW, IMG_H);
+  cardHeader("AI Explainability", expX, y, expW);
 
-  const explainText = `The AI model identified suspicious regions in the ${(data.selectedModality || '').toLowerCase()} image with high confidence (${data.mockPrediction.confidence}%). The analysis focused on texture abnormalities and opacity consolidations which are typical indicators. Grad-CAM visualization confirms the model's attention was concentrated on clinically relevant areas.`;
-  doc.setTextColor(...midGray);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  const explainLines = doc.splitTextToSize(explainText, expW - 8);
-  doc.text(explainLines, expX + 4, y + 14);
+  const explainTxt = `The AI model identified suspicious regions in the `
+    + `${(data.selectedModality || "").toLowerCase()} image with `
+    + `${data.mockPrediction.confidence}% confidence. Analysis focused on `
+    + `texture abnormalities and opacity consolidations. Grad-CAM highlights `
+    + `attention on clinically relevant areas.`;
+  t(C.dark); N(6.5);
+  const exLines = doc.splitTextToSize(explainTxt, expW - 9);
+    doc.text(exLines.slice(0, 6), expX + 4, y + 14, {
+  lineHeightFactor: 1.8
+    });
 
-  // Key findings
-  const findingsY = y + 14 + explainLines.length * 4 + 3;
-  doc.setFillColor(255, 251, 235);
-  doc.setDrawColor(253, 230, 138);
-  doc.roundedRect(expX + 2, findingsY, expW - 4, imgSectionH - findingsY + y - 3, 2, 2, 'FD');
-  doc.setTextColor(180, 83, 9);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.text('★ KEY FINDINGS', expX + 5, findingsY + 6);
 
-  const findings = [
-    'Consolidation in lower lung zones',
-    'Increased opacity patterns detected',
-    'Air bronchograms visible',
-    'Clinical correlation recommended',
-  ];
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(...darkGray);
-  findings.forEach((f, i) => {
-    doc.text(`✓ ${f}`, expX + 5, findingsY + 12 + i * 5.5);
-  });
+  y += IMG_H + 7;
+  hr(y, C.light, 0.2);
+  y += 8;
 
-  y += imgSectionH + 6;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 5 — CLINICAL NOTES & REPORT SUMMARY
+  // ═══════════════════════════════════════════════════════════════════════════
+  y = heading("Clinical Notes & Report Summary", y);
 
-  // ── CLINICAL NOTES + REPORT SUMMARY ──
-  const notesH = 50;
-  const notesW = contentWidth * 0.55;
+  const BLOCK_H = 48;
+  const notesW  = CW * 0.56;
+  const sumX2   = ML + notesW + 5;
+  const sumW2   = CW - notesW - 5;
 
-  // Clinical Notes
-  doc.setFillColor(...white);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(margin, y, notesW, notesH, 2, 2, 'FD');
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('✏ CLINICAL NOTES', margin + 4, y + 8);
+  // ── Notes card ──
+  card(ML, y, notesW, BLOCK_H);
+  cardHeader("Clinical Notes", ML, y, notesW);
 
-  doc.setFillColor(...lightGray);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(margin + 3, y + 11, notesW - 6, 24, 1, 1, 'FD');
+  const notesTxt = data.doctorNotes || "No clinical notes provided.";
+  t(C.dark); N(7.5);
+  const nLines = doc.splitTextToSize(notesTxt, notesW - 10);
+  doc.text(nLines.slice(0, 5), ML + 5, y + 14, {
+  lineHeightFactor: 1.6
+    });
 
-  const notesText = data.doctorNotes || 'No clinical notes provided.';
-  doc.setTextColor(...midGray);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  const notesLines = doc.splitTextToSize(notesText, notesW - 12);
-  doc.text(notesLines.slice(0, 5), margin + 6, y + 17);
+  // Signature strip — 12 mm from bottom of card
+  const sigY = y + BLOCK_H - 13;
+  f(C.surface); s(C.light); lw(0.2);
+  doc.roundedRect(ML + 3, sigY, notesW - 6, 11, 1.2, 1.2, "FD");
+  t(C.black); B(7.5); doc.text("Dr. Hadjer Bouziani", ML + 7, sigY + 5);
+  t(C.mid);   N(6);   doc.text("MD, Radiologist  ·  License: MD12345678", ML + 7, sigY + 9);
+  t(C.mid);   I(9.5); doc.text("Dr. Hadjer", ML + notesW - 22, sigY + 7);
 
-  // Doctor signature area
-  doc.setFillColor(249, 250, 251);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(margin + 3, y + 37, notesW - 6, 10, 1, 1, 'FD');
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('Dr. Sarah Johnson', margin + 7, y + 42);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(...midGray);
-  doc.text('MD, Radiologist  |  License: MD12345678', margin + 7, y + 46.5);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text('Dr. Johnson', notesW - 20, y + 43);
-  doc.setFontSize(6.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(dateStr, notesW, y + 47);
-
-  // Report Summary
-  const summaryX = margin + notesW + 5;
-  const summaryW = contentWidth - notesW - 5;
-  doc.setFillColor(...lightGray);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(summaryX, y, summaryW, notesH, 2, 2, 'FD');
-  doc.setTextColor(...darkGray);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('REPORT SUMMARY', summaryX + 4, y + 8);
+  // ── Summary card ──
+  card(sumX2, y, sumW2, BLOCK_H);
+  cardHeader("Report Summary", sumX2, y, sumW2);
 
   const summaryRows = [
-    { label: 'Modality', value: data.selectedModality || '—' },
-    { label: 'AI Model', value: data.selectedModel?.name?.split(' ').slice(0, 3).join(' ') || '—' },
-    { label: 'Analysis Type', value: `${data.mockPrediction.diagnosis} Detection` },
-    { label: 'Image Quality', value: 'Good' },
-    { label: 'Processing Time', value: '8.4 seconds' },
+    { label: "Modality",         value: data.selectedModality || "—",                          vc: C.dark  },
+    { label: "AI Model",         value: data.selectedModel?.name?.split(" ").slice(0,3).join(" ") || "—", vc: C.dark  },
+    { label: "Analysis Type",    value: `${data.mockPrediction.diagnosis} Detection`,           vc: C.dark  },
+    { label: "Image Quality",    value: "Good",                                                  vc: C.green },
+    { label: "Processing Time",  value: "8.4 s",                                                 vc: C.dark  },
   ];
-
-  summaryRows.forEach((row, i) => {
-    const ry = y + 15 + i * 7.5;
-    doc.setTextColor(...midGray);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(row.label, summaryX + 4, ry);
-    if (row.label === 'Image Quality') {
-      doc.setTextColor(...green);
-    } else {
-      doc.setTextColor(...darkGray);
+  summaryRows.forEach(({ label, value, vc }, i) => {
+    const ry = y + 14 + i * 6.6;
+    t(C.mid); N(6.5); doc.text(label, sumX2 + 5, ry);
+    t(vc);    B(6.5); doc.text(value, sumX2 + sumW2 - 5, ry, { align: "right" });
+    if (i < summaryRows.length - 1) {
+      lw(0.1); s(C.light);
+      doc.line(sumX2 + 5, ry + 2.5, sumX2 + sumW2 - 5, ry + 2.5);
     }
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.text(row.value, summaryX + summaryW - 4, ry, { align: 'right' });
   });
 
-  y += notesH + 6;
+  y += BLOCK_H + 7;
+  hr(y, C.light, 0.2);
+  y += 7;
 
-  // ── DISCLAIMER ──
-  doc.setFillColor(255, 252, 232);
-  doc.setDrawColor(253, 224, 71);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'FD');
-  doc.setTextColor(180, 83, 9);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('⚠  IMPORTANT MEDICAL DISCLAIMER', margin + 5, y + 6);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(120, 53, 15);
-  const disclaimerLines = [
-    'This AI-generated report is intended to assist qualified healthcare professionals and should not replace clinical judgment.',
-    'All findings must be reviewed and validated by a licensed physician before any medical decisions are made.',
-    'This report is confidential and intended solely for the treating physician.',
-  ];
-  disclaimerLines.forEach((line, i) => {
-    doc.text(line, margin + 5, y + 10 + i * 3.8);
-  });
 
-  y += 24;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 7 — FOOTER  (pinned at bottom of page)
+  // ═══════════════════════════════════════════════════════════════════════════
+  hr(PH - 15, C.light, 0.3);
+  t(C.mid); N(6.5);
+  doc.text("AI Medical Diagnostics Platform  ·  Federated Learning & SSL Technology", ML, PH - 10);
+  doc.text("www.ai-medical.ai",          PW / 2,     PH - 10, { align: "center" });
+  doc.text("support@ai-medical.ai",      PW - MR,    PH - 10, { align: "right"  });
+  t(C.light); N(5.5);
+  doc.text(`Page 1 of 1  ·  ${reportId}`, PW / 2, PH - 6, { align: "center" });
 
-  // ── FOOTER ──
-  doc.setFillColor(...navy);
-  doc.rect(0, pageHeight - 14, pageWidth, 14, 'F');
-  doc.setTextColor(...white);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text('AI Medical Diagnostics Platform', margin, pageHeight - 7);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(148, 196, 255);
-  doc.text('Federated Learning & SSL Technology', margin, pageHeight - 3);
-  doc.setTextColor(148, 196, 255);
-  doc.text('www.ai-medical.ai', pageWidth / 2, pageHeight - 7, { align: 'center' });
-  doc.text('support@ai-medical.ai', pageWidth - margin, pageHeight - 7, { align: 'right' });
-
-  // Save
-  doc.save(`Medical_Report_${data.patientInfo.name.replace(/\s+/g, '_') || 'Patient'}_${reportId}.pdf`);
+  // ─── Save ──────────────────────────────────────────────────────────────────
+  const safeName = (data.patientInfo.name || "Patient").replace(/\s+/g, "_");
+  doc.save(`Medical_Report_${safeName}_${reportId}.pdf`);
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -603,12 +527,12 @@ export function DiagnosisTool() {
 
   const steps = [
     { number: 1, title: 'Modality', icon: Target },
-    { number: 2, title: 'Model', icon: Brain },
-    { number: 3, title: 'Patient', icon: User },
-    { number: 4, title: 'Upload', icon: Upload },
+    { number: 2, title: 'Model',    icon: Brain },
+    { number: 3, title: 'Patient',  icon: User },
+    { number: 4, title: 'Upload',   icon: Upload },
     { number: 5, title: 'Analysis', icon: Sparkles },
-    { number: 6, title: 'Explain', icon: Eye },
-    { number: 7, title: 'Export', icon: FileText },
+    { number: 6, title: 'Explain',  icon: Eye },
+    { number: 7, title: 'Export',   icon: FileText },
   ];
 
   const modalities = [
@@ -664,39 +588,47 @@ export function DiagnosisTool() {
 
   const modelsByModality: Record<string, Model[]> = {
     'Chest X-Ray': [
-      { id: 1, name: 'ResNet18 SSL-FL v2.1', status: 'Clinical Approved', accuracy: '97.87%' },
-      { id: 2, name: 'DenseNet121 SSL-FL v2.0', status: 'Experimental', accuracy: '96.45%' },
+      { id: 1, name: 'ResNet18 SSL-FL v2.1',    status: 'Clinical Approved', accuracy: '97.87%' },
+      { id: 2, name: 'DenseNet121 SSL-FL v2.0',  status: 'Experimental',      accuracy: '96.45%' },
     ],
     'Brain MRI': [
-      { id: 3, name: 'DenseNet121 SSL-FL v3.0', status: 'Clinical Approved', accuracy: '99.02%' },
-      { id: 4, name: 'EfficientNet-B4 SSL-FL v1.5', status: 'Experimental', accuracy: '98.15%' },
+      { id: 3, name: 'DenseNet121 SSL-FL v3.0',   status: 'Clinical Approved', accuracy: '99.02%' },
+      { id: 4, name: 'EfficientNet-B4 SSL-FL v1.5',status: 'Experimental',      accuracy: '98.15%' },
     ],
     'Retinal OCT': [
-      { id: 5, name: 'EfficientNet-B3 SSL-FL v1.8', status: 'Clinical Approved', accuracy: '97.50%' },
-      { id: 6, name: 'ResNet50 SSL-FL v2.3', status: 'Experimental', accuracy: '96.80%' },
+      { id: 5, name: 'EfficientNet-B3 SSL-FL v1.8',status: 'Clinical Approved', accuracy: '97.50%' },
+      { id: 6, name: 'ResNet50 SSL-FL v2.3',        status: 'Experimental',      accuracy: '96.80%' },
     ],
     'Skin Lesion': [
-      { id: 7, name: 'MobileNetV2 SSL-FL v2.5', status: 'Clinical Approved', accuracy: '94.30%' },
-      { id: 8, name: 'InceptionV3 SSL-FL v1.9', status: 'Experimental', accuracy: '93.75%' },
+      { id: 7, name: 'MobileNetV2 SSL-FL v2.5',  status: 'Clinical Approved', accuracy: '94.30%' },
+      { id: 8, name: 'InceptionV3 SSL-FL v1.9',  status: 'Experimental',      accuracy: '93.75%' },
     ],
   };
 
   const mockPrediction = {
     diagnosis:
-      selectedModality === 'Chest X-Ray' ? 'Pneumonia'
-      : selectedModality === 'Brain MRI' ? 'Glioma'
-      : selectedModality === 'Retinal OCT' ? 'Diabetic Macular Edema'
-      : 'Melanoma',
+      selectedModality === 'Chest X-Ray'  ? 'Pneumonia' :
+      selectedModality === 'Brain MRI'    ? 'Glioma' :
+      selectedModality === 'Retinal OCT'  ? 'Diabetic Macular Edema' :
+      'Melanoma',
     confidence: 97.2,
     riskLevel: 'Moderate',
     detailedResults: [
       {
-        label: selectedModality === 'Chest X-Ray' ? 'Pneumonia' : selectedModality === 'Brain MRI' ? 'Glioma' : selectedModality === 'Retinal OCT' ? 'DME' : 'Melanoma',
+        label:
+          selectedModality === 'Chest X-Ray' ? 'Pneumonia' :
+          selectedModality === 'Brain MRI'   ? 'Glioma' :
+          selectedModality === 'Retinal OCT' ? 'DME' :
+          'Melanoma',
         probability: 97.2,
       },
       { label: 'Normal', probability: 2.1 },
       {
-        label: selectedModality === 'Chest X-Ray' ? 'Tuberculosis' : selectedModality === 'Brain MRI' ? 'Meningioma' : selectedModality === 'Retinal OCT' ? 'Drusen' : 'Benign',
+        label:
+          selectedModality === 'Chest X-Ray' ? 'Tuberculosis' :
+          selectedModality === 'Brain MRI'   ? 'Meningioma' :
+          selectedModality === 'Retinal OCT' ? 'Drusen' :
+          'Benign',
         probability: 0.7,
       },
     ],
@@ -719,7 +651,7 @@ export function DiagnosisTool() {
     setPatientInfo({ ...patientInfo, age: stripped });
     if (stripped === '') { setAgeError(''); return; }
     const num = parseInt(stripped, 10);
-    if (num <= 0) setAgeError('Age must be greater than 0');
+    if (num <= 0)   setAgeError('Age must be greater than 0');
     else if (num > 130) setAgeError('Age must be 130 or less');
     else setAgeError('');
   };
@@ -751,7 +683,6 @@ export function DiagnosisTool() {
     setIsExporting(true);
     toast.info('Generating PDF report...');
     try {
-      // Load jsPDF from CDN
       if (!(window as any).jspdf) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement('script');
@@ -761,16 +692,7 @@ export function DiagnosisTool() {
           document.head.appendChild(script);
         });
       }
-
-      await generateMedicalPDF({
-        patientInfo,
-        selectedModality,
-        selectedModel,
-        uploadedImage,
-        mockPrediction,
-        doctorNotes,
-      });
-
+      await generateMedicalPDF({ patientInfo, selectedModality, selectedModel, uploadedImage, mockPrediction, doctorNotes });
       toast.success('PDF report downloaded!');
     } catch (err) {
       console.error(err);
@@ -876,7 +798,7 @@ export function DiagnosisTool() {
                           <Brain className={`w-3.5 h-3.5 ${isSelected ? modality.iconColor : 'text-gray-400'}`} />
                           {modelsByModality[modality.name]?.length} AI models available
                         </span>
-                        <span className={`text-xs font-semibold flex items-center gap-1 ${isSelected ? modality.iconColor : 'text-gray-400'}`}>{isSelected ? 'Selected ✓' : 'Select →'}</span>
+                        <span className={`text-xs font-semibold flex items-center gap-1 ${isSelected ? modality.iconColor : 'text-gray-400'}`}>{isSelected ? 'Selected' : 'Select'}</span>
                       </div>
                     </div>
                   </div>
@@ -947,7 +869,7 @@ export function DiagnosisTool() {
                     <div className="flex gap-3 h-12 items-center">
                       {(['Male', 'Female'] as const).map((g) => (
                         <button key={g} type="button" onClick={() => setPatientInfo({ ...patientInfo, gender: g })} className={`flex-1 h-12 rounded-lg border-2 text-sm font-semibold transition-all duration-200 ${patientInfo.gender === g ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400'}`}>
-                          {g === 'Male' ? '♂ Male' : '♀ Female'}
+                          {g === 'Male' ? 'Male' : 'Female'}
                         </button>
                       ))}
                     </div>
@@ -1192,3 +1114,4 @@ export function DiagnosisTool() {
     </div>
   );
 }
+
