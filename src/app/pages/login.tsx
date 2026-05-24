@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
-import { Eye, EyeOff, Activity, Shield, Stethoscope, FlaskConical, Check } from 'lucide-react';
+import { Eye, EyeOff, Shield, Stethoscope, FlaskConical, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '../context/user-context';
+import logo from './image.png';
 
 export function Login() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export function Login() {
   const roles = [
     {
       id: 'doctor' as const,
-      name: 'Physician Platform',
+      name: 'Doctor Platform',
       description: 'Clinical diagnosis and patient care',
       icon: Stethoscope,
       color: 'from-blue-500 to-cyan-600'
@@ -57,11 +58,13 @@ export function Login() {
         {/* Logo/Brand */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Activity className="w-7 h-7 text-white" />
-            </div>
+            <img
+              src={logo}
+              alt="MedFusion-AI Logo"
+              className="w-12 h-12 rounded-xl shadow-lg object-cover"
+            />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              FedMedAI
+              MedFusion-AI
             </h1>
           </div>
           <p className="text-gray-600">Federated Learning Platform for Medical AI</p>
@@ -164,7 +167,7 @@ export function Login() {
                 className="w-full h-11 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                 disabled={isLoading}
               >
-                {isLoading ? 'Signing in...' : `Sign In to ${selectedRole === 'doctor' ? 'Physician' : 'AI Team'} Platform`}
+                {isLoading ? 'Signing in...' : `Sign In to ${selectedRole === 'doctor' ? 'Doctor' : 'AI Team'} Platform`}
               </Button>
             </form>
 
