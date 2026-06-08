@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,8 +12,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Download,
-  Save,
-  Send,
   Brain,
   Eye,
   FileText,
@@ -29,6 +27,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import gradMeImg from './gradme.jpg';
 
 type Modality = 'Chest X-Ray' | 'Brain MRI' | 'Retinal OCT' | 'Skin Lesion' | null;
 
@@ -37,6 +36,146 @@ interface Model {
   name: string;
   status: 'Clinical Approved' | 'Experimental';
   accuracy: string;
+}
+
+// ── FAKE BACKEND ──────────────────────────────────────────────────────────────
+const KNOWN_CASES: Record<string, {
+  diagnosis: string;
+  confidence: number;
+  riskLevel: 'Low' | 'Moderate' | 'High';
+  detailedResults: { label: string; probability: number }[];
+  gradCamSrc: string | null;
+}> = {
+  'Brain MRI::Te-aug-me_26.jpg': {
+    diagnosis: 'Meningioma',
+    confidence: 96.4,
+    riskLevel: 'Moderate',
+    detailedResults: [
+      { label: 'Meningioma', probability: 96.4 },
+      { label: 'No Tumor',   probability: 2.1  },
+      { label: 'Glioma',     probability: 1.5  },
+    ],
+    gradCamSrc: gradMeImg,
+  },
+};
+
+const UNKNOWN_RESULT = {
+  diagnosis: 'Unknown / Unrecognized',
+  confidence: 31.7,
+  riskLevel: 'High' as const,
+  detailedResults: [
+    { label: 'Unknown Pattern', probability: 31.7 },
+    { label: 'Normal',          probability: 28.4 },
+    { label: 'Artifact / Noise',probability: 19.9 },
+  ],
+  gradCamSrc: null,
+};
+
+function getFakeBackendResult(modality: string, filename: string) {
+  const key = `${modality}::${filename}`;
+  return KNOWN_CASES[key] ?? UNKNOWN_RESULT;
+}
+
+// ── Synthetic Grad-CAM ────────────────────────────────────────────────────────
+async function generateSyntheticGradCam(sourceImageDataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = img.naturalWidth  || 512;
+      const H = img.naturalHeight || 512;
+      const canvas = document.createElement('canvas');
+      canvas.width  = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+
+      ctx.filter = 'grayscale(40%) brightness(0.65)';
+      ctx.drawImage(img, 0, 0, W, H);
+      ctx.filter = 'none';
+
+      const seed = (W * 31 + H * 17) % 65537;
+      const rng = (() => {
+        let s = seed;
+        return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+      })();
+
+      const hm = document.createElement('canvas');
+      hm.width  = W;
+      hm.height = H;
+      const hctx = hm.getContext('2d')!;
+      const hmData = hctx.createImageData(W, H);
+      const heat   = new Float32Array(W * H);
+
+      const numBlobs = 4 + Math.floor(rng() * 3);
+      const blobs: { cx: number; cy: number; r: number; intensity: number }[] = [];
+      for (let b = 0; b < numBlobs; b++) {
+        blobs.push({
+          cx:        0.2 + rng() * 0.6,
+          cy:        0.15 + rng() * 0.65,
+          r:         0.06 + rng() * 0.14,
+          intensity: 0.5 + rng() * 0.5,
+        });
+      }
+
+      for (let py = 0; py < H; py++) {
+        const ry = py / H;
+        for (let px = 0; px < W; px++) {
+          const rx = px / W;
+          let v = 0;
+          for (const blob of blobs) {
+            const dx = (rx - blob.cx) / blob.r;
+            const dy = (ry - blob.cy) / (blob.r * (H / W));
+            v += blob.intensity * Math.exp(-(dx * dx + dy * dy) * 2.5);
+          }
+          heat[py * W + px] = v;
+        }
+      }
+
+      let maxH = 0;
+      for (let i = 0; i < heat.length; i++) if (heat[i] > maxH) maxH = heat[i];
+      if (maxH > 0) for (let i = 0; i < heat.length; i++) heat[i] /= maxH;
+
+      for (let i = 0; i < W * H; i++) {
+        const v = heat[i];
+        let r = 0, g = 0, b = 0;
+        if      (v < 0.125) { r = 0;                    g = 0;                       b = 0.5 + v * 4;           }
+        else if (v < 0.375) { r = 0;                    g = (v - 0.125) * 4;         b = 1;                     }
+        else if (v < 0.625) { r = (v - 0.375) * 4;      g = 1;                       b = 1 - (v - 0.375) * 4;  }
+        else if (v < 0.875) { r = 1;                    g = 1 - (v - 0.625) * 4;     b = 0;                    }
+        else                { r = 1 - (v - 0.875) * 4; g = 0;                       b = 0;                    }
+
+        const base = i * 4;
+        hmData.data[base]     = Math.round(r * 255);
+        hmData.data[base + 1] = Math.round(g * 255);
+        hmData.data[base + 2] = Math.round(b * 255);
+        hmData.data[base + 3] = Math.round(v * 210);
+      }
+      hctx.putImageData(hmData, 0, 0);
+
+      ctx.globalAlpha = 0.62;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(hm, 0, 0, W, H);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth   = Math.max(1, W * 0.003);
+      for (const blob of blobs.filter(b => b.intensity > 0.75)) {
+        ctx.beginPath();
+        ctx.ellipse(blob.cx * W, blob.cy * H, blob.r * W * 0.9, blob.r * H * 0.9, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      const labelH = Math.max(18, H * 0.05);
+      ctx.fillRect(0, H - labelH, W, labelH);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `bold ${Math.round(labelH * 0.55)}px monospace`;
+      ctx.fillText('Grad-CAM  ·  AI Attention Map', 8, H - labelH * 0.25);
+
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.src = sourceImageDataUrl;
+  });
 }
 
 function generatePatientId(): string {
@@ -114,13 +253,14 @@ function SkinLesionIcon({ className }: { className?: string }) {
   );
 }
 
-// ── PDF Generator (FIXED - no emoji, all plain ASCII) ──────────────────────────
+// ── PDF Generator ──────────────────────────────────────────────────────────────
 
 async function generateMedicalPDF(data: {
   patientInfo: { name: string; age: string; gender: string; medicalId: string };
   selectedModality: string;
   selectedModel: { name: string; accuracy: string } | null;
   uploadedImage: string | null;
+  gradCamImage: string | null;
   mockPrediction: {
     diagnosis: string;
     confidence: number;
@@ -128,18 +268,16 @@ async function generateMedicalPDF(data: {
     detailedResults: { label: string; probability: number }[];
   };
   doctorNotes: string;
-}) {
+}, returnBlob = false): Promise<Blob | void> {
   const { jsPDF } = (window as any).jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // ─── Page constants ────────────────────────────────────────────────────────
   const PW  = 210;
   const PH  = 297;
-  const ML  = 16;          // left margin
-  const MR  = 16;          // right margin
-  const CW  = PW - ML - MR; // content width = 178 mm
+  const ML  = 16;
+  const MR  = 16;
+  const CW  = PW - ML - MR;
 
-  // ─── Colour palette ────────────────────────────────────────────────────────
   type RGB = [number, number, number];
   const C = {
     black:       [20,  20,  20]  as RGB,
@@ -162,7 +300,6 @@ async function generateMedicalPDF(data: {
     purple:      [109,  40, 217] as RGB,
   };
 
-  // ─── Tiny helpers ──────────────────────────────────────────────────────────
   const f  = (c: RGB) => doc.setFillColor(...c);
   const s  = (c: RGB) => doc.setDrawColor(...c);
   const t  = (c: RGB) => doc.setTextColor(...c);
@@ -171,106 +308,61 @@ async function generateMedicalPDF(data: {
   const I  = (sz: number) => { doc.setFont("helvetica", "italic"); doc.setFontSize(sz); };
   const lw = (w: number)  => doc.setLineWidth(w);
 
-  // Horizontal rule full content width
   const hr = (y: number, col: RGB = C.light, thick = 0.25) => {
-    lw(thick); s(col);
-    doc.line(ML, y, ML + CW, y);
+    lw(thick); s(col); doc.line(ML, y, ML + CW, y);
   };
 
-  // Small filled rectangle bullet
-  const bullet = (x: number, y: number, col: RGB, sz = 1.4) => {
-    f(col); doc.rect(x, y - sz * 0.8, sz, sz, "F");
-  };
-
-  // Progress bar: track + fill
   const bar = (x: number, y: number, w: number, pct: number, col: RGB, h = 2.2) => {
-    f(C.light);
-    doc.roundedRect(x, y, w, h, 0.6, 0.6, "F");
-    f(col);
-    doc.roundedRect(x, y, Math.max(0.4, w * Math.min(pct, 100) / 100), h, 0.6, 0.6, "F");
+    f(C.light); doc.roundedRect(x, y, w, h, 0.6, 0.6, "F");
+    f(col); doc.roundedRect(x, y, Math.max(0.4, w * Math.min(pct, 100) / 100), h, 0.6, 0.6, "F");
   };
 
-  // Pill / badge
-  const pill = (
-    label: string, cx: number, cy: number,
-    bg: RGB, fg: RGB, pw = 30, ph = 5.5
-  ) => {
-    f(bg); s(bg); lw(0);
-    doc.roundedRect(cx - pw / 2, cy - ph * 0.65, pw, ph, 1.8, 1.8, "F");
-    t(fg); B(6);
-    doc.text(label.toUpperCase(), cx, cy, { align: "center" });
+  const pill = (label: string, cx: number, cy: number, bg: RGB, fg: RGB, pw = 30, ph = 5.5) => {
+    f(bg); s(bg); lw(0); doc.roundedRect(cx - pw / 2, cy - ph * 0.65, pw, ph, 1.8, 1.8, "F");
+    t(fg); B(6); doc.text(label.toUpperCase(), cx, cy, { align: "center" });
   };
 
-  // Section heading — left accent stripe + uppercase label + soft rule below
   const heading = (label: string, y: number): number => {
     f(C.blue); doc.rect(ML, y - 4, 3, 6, "F");
     t(C.blue); B(8); doc.text(label.toUpperCase(), ML + 6, y);
     hr(y + 2.8, C.blueSoft, 0.3);
-    return y + 8; // returns y AFTER the heading (ready for content)
+    return y + 8;
   };
 
-  // Simple card outline
   const card = (x: number, y: number, w: number, h: number, fill: RGB = C.white) => {
-    f(fill); s(C.light); lw(0.3);
-    doc.roundedRect(x, y, w, h, 2, 2, "FD");
+    f(fill); s(C.light); lw(0.3); doc.roundedRect(x, y, w, h, 2, 2, "FD");
   };
 
-  // Card internal sub-header line
   const cardHeader = (label: string, x: number, y: number, w: number) => {
     t(C.mid); N(6.5); doc.text(label, x + 4, y + 5.5);
     lw(0.2); s(C.light); doc.line(x, y + 7.5, x + w, y + 7.5);
   };
 
-  // ─── Date / ID ─────────────────────────────────────────────────────────────
   const now      = new Date();
   const dateStr  = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const timeStr  = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const reportId = "RPT-" + Math.random().toString(36).toUpperCase().substring(2, 10);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 1 — HEADER
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Accent top bar
   f(C.blue); doc.rect(0, 0, PW, 2.5, "F");
-
-  // Institution breadcrumb
   t(C.mid); N(6.5);
   doc.text("AI Medical Diagnostics Platform  ·  Federated Learning & SSL Technology", ML, 9);
-
-  // Separator under breadcrumb
   hr(11, C.light, 0.2);
+  t(C.black); B(17); doc.text("Medical Diagnosis Report", ML, 20);
+  t(C.mid); I(7.5); doc.text("AI-Assisted Radiological Analysis", ML, 26);
 
-  // Main title
-  t(C.black); B(17);
-  doc.text("Medical Diagnosis Report", ML, 20);
+  const metaLX = ML + CW - 58;
+  const metaVX = metaLX + 20;
+  [{ label: "Date:", value: dateStr }, { label: "Time:", value: timeStr }, { label: "Report ID:", value: reportId }]
+    .forEach(({ label, value }, i) => {
+      const ry = 20 + i * 5;
+      t(C.mid); N(7); doc.text(label, metaLX, ry);
+      t(C.black); B(7); doc.text(value, metaVX, ry);
+    });
 
-  // Subtitle
-  t(C.mid); I(7.5);
-  doc.text("AI-Assisted Radiological Analysis", ML, 26);
-
-  // Right meta block — labels at fixed column, values indented
-  const metaLX = ML + CW - 58;   // label X
-  const metaVX = metaLX + 20;    // value X
-  const metaRows = [
-    { label: "Date:",      value: dateStr  },
-    { label: "Time:",      value: timeStr  },
-    { label: "Report ID:", value: reportId },
-  ];
-  metaRows.forEach(({ label, value }, i) => {
-    const ry = 20 + i * 5;
-    t(C.mid); N(7); doc.text(label, metaLX, ry);
-    t(C.black); B(7); doc.text(value, metaVX, ry);
-  });
-
-  // Full-width separator
   hr(36, C.light, 0.35);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 2 — PATIENT INFORMATION
-  // ═══════════════════════════════════════════════════════════════════════════
   let y = 43;
   y = heading("Patient Information", y);
-  // y is now the baseline for the first content row
 
   const pCols = [
     { label: "Patient Name",  value: data.patientInfo.name || "N/A"  },
@@ -284,161 +376,90 @@ async function generateMedicalPDF(data: {
     t(C.mid); N(6.5); doc.text(label, cx, y);
     t(C.black); B(8); doc.text(value, cx, y + 6);
   });
+  y += 16; hr(y, C.light, 0.2); y += 8;
 
-  y += 16;   // clear label + value + breathing room
-  hr(y, C.light, 0.2);
-  y += 8;
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 3 — PRIMARY DIAGNOSIS
-  // ═══════════════════════════════════════════════════════════════════════════
   y = heading("Primary Diagnosis", y);
 
-  const DIAG_H  = 50;                    // card height
-  const diagW   = CW * 0.50;            // left card width
+  const DIAG_H  = 50;
+  const diagW   = CW * 0.50;
   const probX   = ML + diagW + 5;
   const probW   = CW - diagW - 5;
 
-  // ── Left card: diagnosis ──
   card(ML, y, diagW, DIAG_H, C.surface);
-
-  t(C.mid); N(6.5);
-  doc.text("Primary Diagnosis", ML + 5, y + 7);
-
-  t(C.black); B(21);
-  doc.text(data.mockPrediction.diagnosis, ML + 5, y + 19);
-
-  lw(0.2); s(C.light);
-  doc.line(ML + 4, y + 22, ML + diagW - 4, y + 22);
-
-  t(C.mid); N(6.5);
-  doc.text("Confidence Score", ML + 5, y + 28);
-
-  t(C.blue); B(15);
-  doc.text(`${data.mockPrediction.confidence}%`, ML + 5, y + 37);
-
+  t(C.mid); N(6.5); doc.text("Primary Diagnosis", ML + 5, y + 7);
+  t(C.black); B(21); doc.text(data.mockPrediction.diagnosis, ML + 5, y + 19);
+  lw(0.2); s(C.light); doc.line(ML + 4, y + 22, ML + diagW - 4, y + 22);
+  t(C.mid); N(6.5); doc.text("Confidence Score", ML + 5, y + 28);
+  t(C.blue); B(15); doc.text(`${data.mockPrediction.confidence}%`, ML + 5, y + 37);
   bar(ML + 5, y + 39, diagW - 10, data.mockPrediction.confidence, C.blue, 2.5);
 
-  // Risk badge — bottom right of card
-  const riskBg: RGB = data.mockPrediction.riskLevel === "High"     ? C.redSoft
-                    : data.mockPrediction.riskLevel === "Moderate"  ? C.amberSoft : C.greenSoft;
-  const riskFg: RGB = data.mockPrediction.riskLevel === "High"     ? C.red
-                    : data.mockPrediction.riskLevel === "Moderate"  ? C.amber     : C.green;
-  pill(
-    data.mockPrediction.riskLevel + " Risk",
-    ML + diagW - 20, y + 7,
-    riskBg, riskFg, 34, 5.5
-  );
+  const riskBg: RGB = data.mockPrediction.riskLevel === "High"    ? C.redSoft
+                    : data.mockPrediction.riskLevel === "Moderate" ? C.amberSoft : C.greenSoft;
+  const riskFg: RGB = data.mockPrediction.riskLevel === "High"    ? C.red
+                    : data.mockPrediction.riskLevel === "Moderate" ? C.amber     : C.green;
+  pill(data.mockPrediction.riskLevel + " Risk", ML + diagW - 20, y + 7, riskBg, riskFg, 34, 5.5);
 
-  // ── Right card: probability breakdown ──
   card(probX, y, probW, DIAG_H, C.white);
   cardHeader("Probability Breakdown", probX, y, probW);
 
   const probDot: RGB[] = [C.blue, C.teal, C.purple];
-  const itemH = 9.5;                     // vertical spacing per item
   data.mockPrediction.detailedResults.forEach((r, i) => {
-    const iy = y + 12 + i * itemH;
+    const iy = y + 12 + i * 9.5;
     const dc = probDot[i] ?? C.mid;
-
-    // dot
     f(dc); doc.circle(probX + 5.5, iy + 1.5, 1.8, "F");
-
-    // label
     t(C.dark); N(7.5); doc.text(r.label, probX + 10, iy + 2.5);
-
-    // percent — right-aligned
-    t(dc); B(7.5);
-    doc.text(`${r.probability}%`, probX + probW - 5, iy + 2.5, { align: "right" });
-
-    // bar
+    t(dc); B(7.5); doc.text(`${r.probability}%`, probX + probW - 5, iy + 2.5, { align: "right" });
     bar(probX + 10, iy + 4, probW - 15, r.probability, dc, 2);
   });
 
-  // Model accuracy strip at bottom of right card
   const stripY = y + DIAG_H - 9;
   f(C.blueSoft); lw(0); doc.roundedRect(probX + 4, stripY, probW - 8, 7, 1.5, 1.5, "F");
   t(C.mid); N(6.5); doc.text("Model Accuracy:", probX + 8, stripY + 4.5);
   t(C.blue); B(7.5); doc.text(data.selectedModel?.accuracy || "—", probX + probW - 8, stripY + 4.5, { align: "right" });
 
-  y += DIAG_H + 7;
-  hr(y, C.light, 0.2);
-  y += 8;
+  y += DIAG_H + 7; hr(y, C.light, 0.2); y += 8;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 4 — IMAGING ANALYSIS
-  // ═══════════════════════════════════════════════════════════════════════════
   y = heading("Imaging Analysis", y);
 
-  const IMG_H   = 54;
-  const GAP     = 4;
-  const imgW    = (CW - GAP * 2) * 0.29;    // ≈ 50 mm
-  const hmW     = imgW;
-  const expW    = CW - imgW - hmW - GAP * 2; // remaining width
-  const hmX     = ML + imgW + GAP;
-  const expX    = hmX + hmW + GAP;
+  const IMG_H = 54;
+  const GAP   = 4;
+  const imgW  = (CW - GAP * 2) * 0.29;
+  const hmW   = imgW;
+  const expW  = CW - imgW - hmW - GAP * 2;
+  const hmX   = ML + imgW + GAP;
+  const expX  = hmX + hmW + GAP;
 
-  // ── Panel: Medical Image ──
   card(ML, y, imgW, IMG_H);
   cardHeader("Medical Image", ML, y, imgW);
   if (data.uploadedImage) {
-    try {
-      doc.addImage(data.uploadedImage, "JPEG", ML + 2, y + 9.5, imgW - 4, IMG_H - 12, undefined, "FAST");
-    } catch {
-      f(C.surface); doc.rect(ML + 2, y + 9.5, imgW - 4, IMG_H - 12, "F");
-      t(C.mid); N(7);
-      doc.text("[No image]", ML + imgW / 2, y + IMG_H / 2, { align: "center" });
-    }
-  } else {
-    f(C.surface); doc.rect(ML + 2, y + 9.5, imgW - 4, IMG_H - 12, "F");
+    try { doc.addImage(data.uploadedImage, "JPEG", ML + 2, y + 9.5, imgW - 4, IMG_H - 12, undefined, "FAST"); }
+    catch { f(C.surface); doc.rect(ML + 2, y + 9.5, imgW - 4, IMG_H - 12, "F"); }
   }
 
-  // ── Panel: Heatmap ──
   card(hmX, y, hmW, IMG_H);
   cardHeader("AI Heatmap (Grad-CAM)", hmX, y, hmW);
-  if (data.uploadedImage) {
-    try {
-      doc.addImage(data.uploadedImage, "JPEG", hmX + 2, y + 9.5, hmW - 4, IMG_H - 20, undefined, "FAST");
-    } catch { /* silent */ }
-  } else {
-    f(C.surface); doc.rect(hmX + 2, y + 9.5, hmW - 4, IMG_H - 20, "F");
+  if (data.gradCamImage) {
+    try { doc.addImage(data.gradCamImage, "JPEG", hmX + 2, y + 9.5, hmW - 4, IMG_H - 20, undefined, "FAST"); }
+    catch { /* silent */ }
+  } else if (data.uploadedImage) {
+    try { doc.addImage(data.uploadedImage, "JPEG", hmX + 2, y + 9.5, hmW - 4, IMG_H - 20, undefined, "FAST"); }
+    catch { /* silent */ }
   }
-  // colour scale
-  const scY = y + IMG_H - 8.5;
-  const scColors: RGB[] = [
-    [0,0,128],[0,100,255],[0,200,200],[0,200,100],[255,220,0],[255,130,0],[210,38,38],
-  ];
-  const scSegW = (hmW - 8) / scColors.length;
-  scColors.forEach(([r, g, b], i) => {
-    doc.setFillColor(r, g, b);
-    doc.rect(hmX + 4 + i * scSegW, scY, scSegW, 2.2, "F");
-  });
-  t(C.mid); N(5.5);
-  doc.text("Low", hmX + 4, scY + 5);
-  doc.text("High", hmX + hmW - 10, scY + 5);
 
-  // ── Panel: AI Explainability ──
+  const scY = y + IMG_H - 8.5;
+  const scColors: [number,number,number][] = [[0,0,128],[0,100,255],[0,200,200],[0,200,100],[255,220,0],[255,130,0],[210,38,38]];
+  const scSegW = (hmW - 8) / scColors.length;
+  scColors.forEach(([r, g, b], i) => { doc.setFillColor(r, g, b); doc.rect(hmX + 4 + i * scSegW, scY, scSegW, 2.2, "F"); });
+  t(C.mid); N(5.5); doc.text("Low", hmX + 4, scY + 5); doc.text("High", hmX + hmW - 10, scY + 5);
+
   card(expX, y, expW, IMG_H);
   cardHeader("AI Explainability", expX, y, expW);
-
-  const explainTxt = `The AI model identified suspicious regions in the `
-    + `${(data.selectedModality || "").toLowerCase()} image with `
-    + `${data.mockPrediction.confidence}% confidence. Analysis focused on `
-    + `texture abnormalities and opacity consolidations. Grad-CAM highlights `
-    + `attention on clinically relevant areas.`;
+  const explainTxt = `The AI model identified suspicious regions in the ${(data.selectedModality || "").toLowerCase()} image with ${data.mockPrediction.confidence}% confidence. Analysis focused on texture abnormalities and opacity consolidations.`;
   t(C.dark); N(6.5);
-  const exLines = doc.splitTextToSize(explainTxt, expW - 9);
-    doc.text(exLines.slice(0, 6), expX + 4, y + 14, {
-  lineHeightFactor: 1.8
-    });
+  doc.text(doc.splitTextToSize(explainTxt, expW - 9).slice(0, 6), expX + 4, y + 14, { lineHeightFactor: 1.8 });
 
+  y += IMG_H + 7; hr(y, C.light, 0.2); y += 8;
 
-  y += IMG_H + 7;
-  hr(y, C.light, 0.2);
-  y += 8;
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 5 — CLINICAL NOTES & REPORT SUMMARY
-  // ═══════════════════════════════════════════════════════════════════════════
   y = heading("Clinical Notes & Report Summary", y);
 
   const BLOCK_H = 48;
@@ -446,63 +467,43 @@ async function generateMedicalPDF(data: {
   const sumX2   = ML + notesW + 5;
   const sumW2   = CW - notesW - 5;
 
-  // ── Notes card ──
   card(ML, y, notesW, BLOCK_H);
   cardHeader("Clinical Notes", ML, y, notesW);
-
-  const notesTxt = data.doctorNotes || "No clinical notes provided.";
   t(C.dark); N(7.5);
-  const nLines = doc.splitTextToSize(notesTxt, notesW - 10);
-  doc.text(nLines.slice(0, 5), ML + 5, y + 14, {
-  lineHeightFactor: 1.6
-    });
-
-  // Signature strip — 12 mm from bottom of card
+  doc.text(doc.splitTextToSize(data.doctorNotes || "No clinical notes provided.", notesW - 10).slice(0, 5), ML + 5, y + 14, { lineHeightFactor: 1.6 });
   const sigY = y + BLOCK_H - 13;
-  f(C.surface); s(C.light); lw(0.2);
-  doc.roundedRect(ML + 3, sigY, notesW - 6, 11, 1.2, 1.2, "FD");
+  f(C.surface); s(C.light); lw(0.2); doc.roundedRect(ML + 3, sigY, notesW - 6, 11, 1.2, 1.2, "FD");
   t(C.black); B(7.5); doc.text("Dr. Hadjer Bouziani", ML + 7, sigY + 5);
   t(C.mid);   N(6);   doc.text("MD, Radiologist  ·  License: MD12345678", ML + 7, sigY + 9);
   t(C.mid);   I(9.5); doc.text("Dr. Hadjer", ML + notesW - 22, sigY + 7);
 
-  // ── Summary card ──
   card(sumX2, y, sumW2, BLOCK_H);
   cardHeader("Report Summary", sumX2, y, sumW2);
-
   const summaryRows = [
-    { label: "Modality",         value: data.selectedModality || "—",                          vc: C.dark  },
-    { label: "AI Model",         value: data.selectedModel?.name?.split(" ").slice(0,3).join(" ") || "—", vc: C.dark  },
-    { label: "Analysis Type",    value: `${data.mockPrediction.diagnosis} Detection`,           vc: C.dark  },
-    { label: "Image Quality",    value: "Good",                                                  vc: C.green },
-    { label: "Processing Time",  value: "8.4 s",                                                 vc: C.dark  },
+    { label: "Modality",        value: data.selectedModality || "—",                                          vc: C.dark  },
+    { label: "AI Model",        value: data.selectedModel?.name?.split(" ").slice(0,3).join(" ") || "—",      vc: C.dark  },
+    { label: "Analysis Type",   value: `${data.mockPrediction.diagnosis} Detection`,                          vc: C.dark  },
+    { label: "Image Quality",   value: "Good",                                                                vc: C.green },
+    { label: "Processing Time", value: "8.4 s",                                                               vc: C.dark  },
   ];
   summaryRows.forEach(({ label, value, vc }, i) => {
     const ry = y + 14 + i * 6.6;
     t(C.mid); N(6.5); doc.text(label, sumX2 + 5, ry);
     t(vc);    B(6.5); doc.text(value, sumX2 + sumW2 - 5, ry, { align: "right" });
-    if (i < summaryRows.length - 1) {
-      lw(0.1); s(C.light);
-      doc.line(sumX2 + 5, ry + 2.5, sumX2 + sumW2 - 5, ry + 2.5);
-    }
+    if (i < summaryRows.length - 1) { lw(0.1); s(C.light); doc.line(sumX2 + 5, ry + 2.5, sumX2 + sumW2 - 5, ry + 2.5); }
   });
 
-  y += BLOCK_H + 7;
-  hr(y, C.light, 0.2);
-  y += 7;
-
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 7 — FOOTER  (pinned at bottom of page)
-  // ═══════════════════════════════════════════════════════════════════════════
   hr(PH - 15, C.light, 0.3);
   t(C.mid); N(6.5);
   doc.text("AI Medical Diagnostics Platform  ·  Federated Learning & SSL Technology", ML, PH - 10);
-  doc.text("www.ai-medical.ai",          PW / 2,     PH - 10, { align: "center" });
-  doc.text("support@ai-medical.ai",      PW - MR,    PH - 10, { align: "right"  });
-  t(C.light); N(5.5);
-  doc.text(`Page 1 of 1  ·  ${reportId}`, PW / 2, PH - 6, { align: "center" });
+  doc.text("www.ai-medical.ai", PW / 2, PH - 10, { align: "center" });
+  doc.text("support@ai-medical.ai", PW - MR, PH - 10, { align: "right" });
+  t(C.light); N(5.5); doc.text(`Page 1 of 1  ·  ${reportId}`, PW / 2, PH - 6, { align: "center" });
 
-  // ─── Save ──────────────────────────────────────────────────────────────────
+  if (returnBlob) {
+    return doc.output('blob');
+  }
+
   const safeName = (data.patientInfo.name || "Patient").replace(/\s+/g, "_");
   doc.save(`Medical_Report_${safeName}_${reportId}.pdf`);
 }
@@ -514,16 +515,17 @@ export function DiagnosisTool() {
   const [selectedModality, setSelectedModality] = useState<Modality>(null);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedFilename, setUploadedFilename] = useState<string>('');
+  const [gradCamImage, setGradCamImage] = useState<string | null>(null);
   const [patientInfo, setPatientInfo] = useState({
-    name: '',
-    age: '',
-    gender: '',
-    medicalId: generatePatientId(),
+    name: '', age: '', gender: '', medicalId: generatePatientId(),
   });
   const [ageError, setAgeError] = useState('');
   const [doctorNotes, setDoctorNotes] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<typeof UNKNOWN_RESULT | null>(null);
 
   const steps = [
     { number: 1, title: 'Modality', icon: Target },
@@ -537,106 +539,103 @@ export function DiagnosisTool() {
 
   const modalities = [
     {
-      name: 'Chest X-Ray',
-      Icon: ChestXRayIcon,
-      gradient: 'from-blue-500 to-cyan-500',
-      iconColor: 'text-blue-500',
+      name: 'Chest X-Ray', Icon: ChestXRayIcon,
+      gradient: 'from-blue-500 to-cyan-500', iconColor: 'text-blue-500',
       bgSelected: 'bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/60 dark:to-cyan-950/60',
       borderSelected: 'border-blue-400 dark:border-blue-500',
       badgeClass: 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
-      description: 'Pneumonia, Tuberculosis, COVID-19',
-      tags: ['Pneumonia', 'COVID-19', 'TB'],
-      stat: '97.87% acc',
+      description: 'Normal, Pneumonia, Tuberculosis',
+      tags: ['Normal', 'Pneumonia', 'TB'],
+      stat: '98.51% FedSGA',
     },
     {
-      name: 'Brain MRI',
-      Icon: BrainMRIIcon,
-      gradient: 'from-purple-500 to-violet-600',
-      iconColor: 'text-purple-500',
+      name: 'Brain MRI', Icon: BrainMRIIcon,
+      gradient: 'from-purple-500 to-violet-600', iconColor: 'text-purple-500',
       bgSelected: 'bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/60 dark:to-violet-950/60',
       borderSelected: 'border-purple-400 dark:border-purple-500',
       badgeClass: 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300',
-      description: 'Tumors, Lesions, Structural Abnormalities',
-      tags: ['Tumor', 'Lesion', 'MS'],
-      stat: '99.02% acc',
+      description: 'Glioma, Meningioma, Pituitary, No Tumor',
+      tags: ['Glioma', 'Meningioma', 'Pituitary', 'No Tumor'],
+      stat: '99.02% FedSGA',
     },
     {
-      name: 'Retinal OCT',
-      Icon: RetinalOCTIcon,
-      gradient: 'from-emerald-500 to-teal-500',
-      iconColor: 'text-emerald-500',
+      name: 'Retinal OCT', Icon: RetinalOCTIcon,
+      gradient: 'from-emerald-500 to-teal-500', iconColor: 'text-emerald-500',
       bgSelected: 'bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/60 dark:to-teal-950/60',
       borderSelected: 'border-emerald-400 dark:border-emerald-500',
       badgeClass: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300',
-      description: 'CNV, DME, Drusen, Macular Degeneration',
-      tags: ['CNV', 'DME', 'Drusen'],
-      stat: '97.50% acc',
+      description: 'CNV, DME, Drusen, Normal',
+      tags: ['CNV', 'DME', 'Drusen', 'Normal'],
+      stat: '97.50% FedSGA',
     },
     {
-      name: 'Skin Lesion',
-      Icon: SkinLesionIcon,
-      gradient: 'from-amber-500 to-orange-500',
-      iconColor: 'text-amber-500',
+      name: 'Skin Lesion', Icon: SkinLesionIcon,
+      gradient: 'from-amber-500 to-orange-500', iconColor: 'text-amber-500',
       bgSelected: 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/60 dark:to-orange-950/60',
       borderSelected: 'border-amber-400 dark:border-amber-500',
       badgeClass: 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
-      description: 'Melanoma, Basal Cell, Malignant Detection',
-      tags: ['Melanoma', 'BCC', 'SCC'],
-      stat: '94.30% acc',
+      description: 'Benign, Malignant Detection (HAM10000)',
+      tags: ['Benign', 'Malignant'],
+      stat: '94.30% FedSGA',
     },
   ];
 
   const modelsByModality: Record<string, Model[]> = {
     'Chest X-Ray': [
-      { id: 1, name: 'ResNet18 SSL-FL v2.1',    status: 'Clinical Approved', accuracy: '97.87%' },
+      { id: 1, name: 'ResNet18 SSL-FL v2.1',     status: 'Clinical Approved', accuracy: '98.51%' },
       { id: 2, name: 'DenseNet121 SSL-FL v2.0',  status: 'Experimental',      accuracy: '96.45%' },
     ],
     'Brain MRI': [
-      { id: 3, name: 'DenseNet121 SSL-FL v3.0',   status: 'Clinical Approved', accuracy: '99.02%' },
-      { id: 4, name: 'EfficientNet-B4 SSL-FL v1.5',status: 'Experimental',      accuracy: '98.15%' },
+      { id: 3, name: 'DenseNet121 SSL-FL v3.0',    status: 'Clinical Approved', accuracy: '99.02%' },
+      { id: 4, name: 'EfficientNet-B4 SSL-FL v1.5', status: 'Experimental',     accuracy: '98.15%' },
     ],
     'Retinal OCT': [
-      { id: 5, name: 'EfficientNet-B3 SSL-FL v1.8',status: 'Clinical Approved', accuracy: '97.50%' },
-      { id: 6, name: 'ResNet50 SSL-FL v2.3',        status: 'Experimental',      accuracy: '96.80%' },
+      { id: 5, name: 'EfficientNet-B3 SSL-FL v1.8', status: 'Clinical Approved', accuracy: '97.50%' },
+      { id: 6, name: 'ResNet50 SSL-FL v2.3',         status: 'Experimental',      accuracy: '96.80%' },
     ],
     'Skin Lesion': [
-      { id: 7, name: 'MobileNetV2 SSL-FL v2.5',  status: 'Clinical Approved', accuracy: '94.30%' },
-      { id: 8, name: 'InceptionV3 SSL-FL v1.9',  status: 'Experimental',      accuracy: '93.75%' },
+      { id: 7, name: 'MobileNetV2 SSL-FL v2.5', status: 'Clinical Approved', accuracy: '94.30%' },
+      { id: 8, name: 'InceptionV3 SSL-FL v1.9', status: 'Experimental',      accuracy: '93.75%' },
     ],
   };
 
-  const mockPrediction = {
+  // ── Default predictions per modality with correct classes ──────────────────
+  const defaultPrediction = {
     diagnosis:
       selectedModality === 'Chest X-Ray'  ? 'Pneumonia' :
       selectedModality === 'Brain MRI'    ? 'Glioma' :
-      selectedModality === 'Retinal OCT'  ? 'Diabetic Macular Edema' :
-      'Melanoma',
+      selectedModality === 'Retinal OCT'  ? 'CNV' :
+      'Malignant',
     confidence: 97.2,
-    riskLevel: 'Moderate',
-    detailedResults: [
-      {
-        label:
-          selectedModality === 'Chest X-Ray' ? 'Pneumonia' :
-          selectedModality === 'Brain MRI'   ? 'Glioma' :
-          selectedModality === 'Retinal OCT' ? 'DME' :
-          'Melanoma',
-        probability: 97.2,
-      },
-      { label: 'Normal', probability: 2.1 },
-      {
-        label:
-          selectedModality === 'Chest X-Ray' ? 'Tuberculosis' :
-          selectedModality === 'Brain MRI'   ? 'Meningioma' :
-          selectedModality === 'Retinal OCT' ? 'Drusen' :
-          'Benign',
-        probability: 0.7,
-      },
-    ],
+    riskLevel: 'Moderate' as const,
+    detailedResults:
+      selectedModality === 'Chest X-Ray' ? [
+        { label: 'Pneumonia',    probability: 97.2 },
+        { label: 'Normal',       probability: 1.9  },
+        { label: 'Tuberculosis', probability: 0.9  },
+      ] :
+      selectedModality === 'Brain MRI' ? [
+        { label: 'Glioma',      probability: 97.2 },
+        { label: 'Meningioma',  probability: 1.5  },
+        { label: 'No Tumor',    probability: 0.8  },
+      ] :
+      selectedModality === 'Retinal OCT' ? [
+        { label: 'CNV',    probability: 97.2 },
+        { label: 'DME',    probability: 1.6  },
+        { label: 'Drusen', probability: 0.7  },
+      ] : [
+        { label: 'Malignant', probability: 97.2 },
+        { label: 'Benign',    probability: 2.8  },
+      ],
+    gradCamSrc: null,
   };
+
+  const mockPrediction = analysisResult ?? defaultPrediction;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadedFilename(file.name);
       const reader = new FileReader();
       reader.onloadend = () => {
         setUploadedImage(reader.result as string);
@@ -651,8 +650,8 @@ export function DiagnosisTool() {
     setPatientInfo({ ...patientInfo, age: stripped });
     if (stripped === '') { setAgeError(''); return; }
     const num = parseInt(stripped, 10);
-    if (num <= 0)   setAgeError('Age must be greater than 0');
-    else if (num > 130) setAgeError('Age must be 130 or less');
+    if (num <= 0)        setAgeError('Age must be greater than 0');
+    else if (num > 130)  setAgeError('Age must be 130 or less');
     else setAgeError('');
   };
 
@@ -662,8 +661,30 @@ export function DiagnosisTool() {
     return Number.isInteger(num) && num > 0 && num <= 130;
   };
 
-  const runAnalysis = () => {
+  const runAnalysis = async () => {
     setIsAnalyzing(true);
+    setGradCamImage(null);
+
+    let result;
+    if (selectedModality === 'Brain MRI') {
+      result = getFakeBackendResult(selectedModality, uploadedFilename);
+    } else {
+      result = { ...defaultPrediction, gradCamSrc: null };
+    }
+    setAnalysisResult(result);
+
+    let gcImage: string | null = null;
+    if (result.gradCamSrc) {
+      gcImage = result.gradCamSrc;
+    } else if (uploadedImage) {
+      try {
+        gcImage = await generateSyntheticGradCam(uploadedImage);
+      } catch (err) {
+        console.error('Grad-CAM generation failed', err);
+      }
+    }
+    setGradCamImage(gcImage);
+
     setTimeout(() => {
       setIsAnalyzing(false);
       setCurrentStep(5);
@@ -679,20 +700,28 @@ export function DiagnosisTool() {
     return true;
   };
 
+  // ── Load jsPDF helper ──────────────────────────────────────────────────────
+  const ensureJsPDF = async () => {
+    if (!(window as any).jspdf) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load jsPDF'));
+        document.head.appendChild(script);
+      });
+    }
+  };
+
   const handleExportPDF = async () => {
     setIsExporting(true);
     toast.info('Generating PDF report...');
     try {
-      if (!(window as any).jspdf) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error('Failed to load jsPDF'));
-          document.head.appendChild(script);
-        });
-      }
-      await generateMedicalPDF({ patientInfo, selectedModality, selectedModel, uploadedImage, mockPrediction, doctorNotes });
+      await ensureJsPDF();
+      await generateMedicalPDF({
+        patientInfo, selectedModality: selectedModality!, selectedModel,
+        uploadedImage, gradCamImage, mockPrediction, doctorNotes,
+      });
       toast.success('PDF report downloaded!');
     } catch (err) {
       console.error(err);
@@ -701,6 +730,32 @@ export function DiagnosisTool() {
       setIsExporting(false);
     }
   };
+
+  const handleViewReport = async () => {
+    setIsViewing(true);
+    toast.info('Preparing report preview...');
+    try {
+      await ensureJsPDF();
+      const blob = await generateMedicalPDF(
+        {
+          patientInfo, selectedModality: selectedModality!, selectedModel,
+          uploadedImage, gradCamImage, mockPrediction, doctorNotes,
+        },
+        true,
+      ) as Blob;
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      toast.success('Report opened in new tab!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to open report. Please try again.');
+    } finally {
+      setIsViewing(false);
+    }
+  };
+
+  const gradCamDisplay = gradCamImage ?? uploadedImage ?? '';
+  const isUnknown = mockPrediction.diagnosis === 'Unknown / Unrecognized';
 
   return (
     <div className="space-y-6">
@@ -753,7 +808,7 @@ export function DiagnosisTool() {
       </Card>
 
       <div className="min-h-[600px]">
-        {/* Step 1 */}
+        {/* Step 1 — Modality */}
         {currentStep === 1 && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="text-center max-w-2xl mx-auto">
@@ -796,7 +851,7 @@ export function DiagnosisTool() {
                       <div className={`px-6 py-3 border-t transition-colors duration-300 flex items-center justify-between ${isSelected ? 'border-current/10 bg-white/40 dark:bg-black/10' : 'border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/30'}`}>
                         <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                           <Brain className={`w-3.5 h-3.5 ${isSelected ? modality.iconColor : 'text-gray-400'}`} />
-                          {modelsByModality[modality.name]?.length} AI models available
+                          {modelsByModality[modality.name]?.length} FedSGA models available
                         </span>
                         <span className={`text-xs font-semibold flex items-center gap-1 ${isSelected ? modality.iconColor : 'text-gray-400'}`}>{isSelected ? 'Selected' : 'Select'}</span>
                       </div>
@@ -808,12 +863,12 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* Step 2 */}
+        {/* Step 2 — Model */}
         {currentStep === 2 && selectedModality && (
           <div className="space-y-6">
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Select AI Model</h2>
-              <p className="text-gray-600 dark:text-gray-400">Choose a model for {selectedModality} analysis</p>
+              <p className="text-gray-600 dark:text-gray-400">Choose a FedSGA model for {selectedModality} analysis</p>
             </div>
             <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               {modelsByModality[selectedModality].map((model) => (
@@ -835,7 +890,7 @@ export function DiagnosisTool() {
                       {selectedModel?.id === model.id && <CheckCircle className="w-6 h-6 text-blue-600" />}
                     </div>
                     <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Model Accuracy</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Model Accuracy (FedSGA)</p>
                       <p className="text-3xl font-bold text-gray-900 dark:text-white">{model.accuracy}</p>
                     </div>
                   </CardContent>
@@ -845,7 +900,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* Step 3 */}
+        {/* Step 3 — Patient */}
         {currentStep === 3 && (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="text-center mb-8">
@@ -869,7 +924,7 @@ export function DiagnosisTool() {
                     <div className="flex gap-3 h-12 items-center">
                       {(['Male', 'Female'] as const).map((g) => (
                         <button key={g} type="button" onClick={() => setPatientInfo({ ...patientInfo, gender: g })} className={`flex-1 h-12 rounded-lg border-2 text-sm font-semibold transition-all duration-200 ${patientInfo.gender === g ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-400'}`}>
-                          {g === 'Male' ? 'Male' : 'Female'}
+                          {g}
                         </button>
                       ))}
                     </div>
@@ -890,7 +945,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* Step 4 */}
+        {/* Step 4 — Upload */}
         {currentStep === 4 && (
           <div className="space-y-6 max-w-3xl mx-auto">
             <div className="text-center mb-8">
@@ -919,9 +974,14 @@ export function DiagnosisTool() {
                     <div className="relative rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700">
                       <img src={uploadedImage} alt="Uploaded" className="w-full h-96 object-contain" />
                       <Badge className="absolute top-4 right-4 bg-green-500 text-white border-0 shadow-lg"><CheckCircle className="w-3 h-3 mr-1" />Image Uploaded</Badge>
+                      {uploadedFilename && (
+                        <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur rounded-lg px-3 py-1.5">
+                          <p className="text-white text-xs font-mono">{uploadedFilename}</p>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-3">
-                      <Button variant="outline" className="flex-1" onClick={() => setUploadedImage(null)}>Change Image</Button>
+                      <Button variant="outline" className="flex-1" onClick={() => { setUploadedImage(null); setUploadedFilename(''); }}>Change Image</Button>
                       <Button className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600" onClick={runAnalysis}>
                         <Zap className="w-4 h-4 mr-2" />Start Analysis
                       </Button>
@@ -933,7 +993,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* Step 5 */}
+        {/* Step 5 — Analysis Results */}
         {currentStep === 5 && (
           <div className="space-y-6">
             {isAnalyzing ? (
@@ -955,16 +1015,37 @@ export function DiagnosisTool() {
                   <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">AI Prediction Results</h2>
                   <p className="text-gray-600 dark:text-gray-400">Analysis completed successfully</p>
                 </div>
+
+                {isUnknown && (
+                  <Card className="border-2 border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 max-w-2xl mx-auto">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold text-red-700 dark:text-red-300">Unrecognized Image Pattern</p>
+                          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                            This image was not recognized as a known case. The AI model could not confidently classify it.
+                            Please verify the image modality matches the selected scan type, ensure the image quality is adequate,
+                            and consult a radiologist for manual review.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <div className="grid md:grid-cols-2 gap-6">
-                  <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                  <Card className={`border-0 shadow-xl text-white ${isUnknown ? 'bg-gradient-to-br from-red-600 to-rose-700' : 'bg-gradient-to-br from-blue-500 to-indigo-600'}`}>
                     <CardContent className="pt-8 pb-8">
                       <div className="text-center">
                         <Badge className="bg-white/20 text-white border-0 mb-4">Primary Diagnosis</Badge>
                         <h3 className="text-3xl font-bold mb-2">{mockPrediction.diagnosis}</h3>
-                        <p className="text-blue-100 mb-6">Confidence: {mockPrediction.confidence}%</p>
+                        <p className={`mb-6 ${isUnknown ? 'text-red-100' : 'text-blue-100'}`}>Confidence: {mockPrediction.confidence}%</p>
                         <div className="bg-white/10 backdrop-blur rounded-lg p-4">
                           <p className="text-sm mb-2">Risk Level</p>
-                          <Badge className={`${mockPrediction.riskLevel === 'High' ? 'bg-red-500' : mockPrediction.riskLevel === 'Moderate' ? 'bg-amber-500' : 'bg-green-500'} text-white border-0 text-lg px-4 py-2`}>{mockPrediction.riskLevel}</Badge>
+                          <Badge className={`${mockPrediction.riskLevel === 'High' ? 'bg-red-500' : mockPrediction.riskLevel === 'Moderate' ? 'bg-amber-500' : 'bg-green-500'} text-white border-0 text-lg px-4 py-2`}>
+                            {mockPrediction.riskLevel}
+                          </Badge>
                         </div>
                       </div>
                     </CardContent>
@@ -980,7 +1061,7 @@ export function DiagnosisTool() {
                               <span className="text-sm font-bold text-gray-900 dark:text-white">{result.probability}%</span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                              <div className={`h-2 rounded-full ${index === 0 ? 'bg-gradient-to-r from-blue-500 to-indigo-600' : 'bg-gray-400'}`} style={{ width: `${result.probability}%` }} />
+                              <div className={`h-2 rounded-full ${index === 0 ? (isUnknown ? 'bg-gradient-to-r from-red-500 to-rose-600' : 'bg-gradient-to-r from-blue-500 to-indigo-600') : 'bg-gray-400'}`} style={{ width: `${result.probability}%` }} />
                             </div>
                           </div>
                         ))}
@@ -993,7 +1074,7 @@ export function DiagnosisTool() {
           </div>
         )}
 
-        {/* Step 6 */}
+        {/* Step 6 — Explainability */}
         {currentStep === 6 && (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1006,6 +1087,11 @@ export function DiagnosisTool() {
                   <h3 className="font-bold text-gray-900 dark:text-white mb-4">Original Image</h3>
                   <div className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-slate-700">
                     <img src={uploadedImage || ''} alt="Original" className="w-full h-80 object-contain" />
+                    {uploadedFilename && (
+                      <div className="absolute bottom-2 left-2 bg-black/60 rounded px-2 py-1">
+                        <p className="text-white text-xs font-mono">{uploadedFilename}</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1013,30 +1099,67 @@ export function DiagnosisTool() {
                 <CardContent className="pt-6 pb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-gray-900 dark:text-white">Grad-CAM Heatmap</h3>
-                    <Badge className="bg-purple-100 text-purple-700 border-0"><Eye className="w-3 h-3 mr-1" />AI Focus Areas</Badge>
+                    <Badge className={`border-0 ${isUnknown ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'}`}>
+                      <Eye className="w-3 h-3 mr-1" />
+                      {isUnknown ? 'Diffuse / No Focus' : 'AI Focus Areas'}
+                    </Badge>
                   </div>
                   <div className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-slate-700">
-                    <img src={uploadedImage || ''} alt="Heatmap" className="w-full h-80 object-contain opacity-60" />
-                    <div className="absolute inset-0 bg-gradient-to-br from-red-500/40 via-yellow-500/40 to-transparent mix-blend-multiply" />
-                    <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur rounded-lg p-3">
-                      <p className="text-white text-sm"><span className="font-semibold">Red areas:</span> High attention regions where AI detected abnormalities</p>
-                    </div>
+                    {gradCamDisplay ? (
+                      <img src={gradCamDisplay} alt="Grad-CAM" className="w-full h-80 object-contain" />
+                    ) : (
+                      <div className="w-full h-80 flex items-center justify-center">
+                        <p className="text-gray-400 text-sm">Generating heatmap...</p>
+                      </div>
+                    )}
+                    {!isUnknown && (
+                      <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur rounded-lg p-3">
+                        <p className="text-white text-sm"><span className="font-semibold">Red areas:</span> High attention regions where AI detected abnormalities</p>
+                      </div>
+                    )}
+                    {isUnknown && (
+                      <div className="absolute bottom-4 left-4 right-4 bg-red-900/70 backdrop-blur rounded-lg p-3">
+                        <p className="text-red-100 text-sm"><span className="font-semibold">Scattered activation:</span> No dominant region identified — pattern unrecognized</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             </div>
             <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur">
               <CardContent className="pt-6 pb-6">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Lightbulb className="w-5 h-5 text-amber-500" />Clinical Explanation</h3>
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                  The AI model identified suspicious regions in the {selectedModality?.toLowerCase()} image with high confidence. The highlighted areas (shown in red) indicate potential {mockPrediction.diagnosis.toLowerCase()} patterns. The model focused primarily on texture abnormalities and density variations typical of this condition.
-                </p>
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Lightbulb className={`w-5 h-5 ${isUnknown ? 'text-red-500' : 'text-amber-500'}`} />
+                  Clinical Explanation
+                </h3>
+                {isUnknown ? (
+                  <div className="space-y-3">
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      The AI model was <span className="font-semibold text-red-600 dark:text-red-400">unable to confidently classify</span> this image.
+                      The Grad-CAM activation map shows scattered, diffuse attention across the image without focusing on any clinically meaningful region.
+                      This typically occurs when the input image does not match the distribution of training data.
+                    </p>
+                    <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                      <p className="text-sm text-red-700 dark:text-red-300 font-medium mb-1">Possible reasons:</p>
+                      <ul className="text-sm text-red-600 dark:text-red-400 space-y-1 list-disc list-inside">
+                        <li>Image modality mismatch (e.g. non-MRI image selected for Brain MRI)</li>
+                        <li>Poor image quality, artifacts, or heavy preprocessing</li>
+                        <li>Image not in the model's training distribution</li>
+                        <li>Corrupted or non-medical image provided</li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                    The AI model identified suspicious regions in the {selectedModality?.toLowerCase()} image with high confidence. The highlighted areas (shown in red) indicate potential <span className="font-semibold">{mockPrediction.diagnosis.toLowerCase()}</span> patterns. The model focused primarily on texture abnormalities and density variations typical of this condition.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Step 7 */}
+        {/* Step 7 — Export */}
         {currentStep === 7 && (
           <div className="space-y-6 max-w-4xl mx-auto">
             <div className="text-center mb-8">
@@ -1057,29 +1180,39 @@ export function DiagnosisTool() {
                   <div><p className="text-gray-600 dark:text-gray-400">Medical ID</p><p className="font-semibold text-gray-900 dark:text-white font-mono">{patientInfo.medicalId}</p></div>
                   <div><p className="text-gray-600 dark:text-gray-400">Modality</p><p className="font-semibold text-gray-900 dark:text-white">{selectedModality}</p></div>
                   <div><p className="text-gray-600 dark:text-gray-400">AI Model</p><p className="font-semibold text-gray-900 dark:text-white">{selectedModel?.name}</p></div>
-                  <div><p className="text-gray-600 dark:text-gray-400">Diagnosis</p><p className="font-semibold text-gray-900 dark:text-white">{mockPrediction.diagnosis}</p></div>
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400">Diagnosis</p>
+                    <p className={`font-semibold ${isUnknown ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
+                      {mockPrediction.diagnosis}
+                    </p>
+                  </div>
                   <div><p className="text-gray-600 dark:text-gray-400">Confidence</p><p className="font-semibold text-gray-900 dark:text-white">{mockPrediction.confidence}%</p></div>
                 </div>
               </CardContent>
             </Card>
-            <div className="grid md:grid-cols-3 gap-4">
+
+            {/* ── Export Buttons: View Report + Download Report ── */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-2 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/20"
+                onClick={handleViewReport}
+                disabled={isViewing || isExporting}
+              >
+                {isViewing
+                  ? <><RefreshCw className="w-5 h-5 mr-2 animate-spin" />Opening...</>
+                  : <><Eye className="w-5 h-5 mr-2" />View Report</>}
+              </Button>
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700"
                 onClick={handleExportPDF}
-                disabled={isExporting}
+                disabled={isExporting || isViewing}
               >
-                {isExporting ? (
-                  <><RefreshCw className="w-5 h-5 mr-2 animate-spin" />Generating...</>
-                ) : (
-                  <><Download className="w-5 h-5 mr-2" />Export PDF</>
-                )}
-              </Button>
-              <Button size="lg" className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700" onClick={() => toast.success('Saved to case history!')}>
-                <Save className="w-5 h-5 mr-2" />Save to History
-              </Button>
-              <Button size="lg" variant="outline" className="border-2" onClick={() => toast.success('Report sent to patient!')}>
-                <Send className="w-5 h-5 mr-2" />Send to Patient
+                {isExporting
+                  ? <><RefreshCw className="w-5 h-5 mr-2 animate-spin" />Generating...</>
+                  : <><Download className="w-5 h-5 mr-2" />Download Report</>}
               </Button>
             </div>
           </div>
@@ -1114,4 +1247,3 @@ export function DiagnosisTool() {
     </div>
   );
 }
-

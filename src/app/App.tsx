@@ -4,6 +4,7 @@ import { CaseProvider } from "./context/case-context";
 import { ThemeProvider } from "./context/theme-context";
 import { UserProvider } from "./context/user-context";
 import { Toaster } from "./components/ui/sonner";
+import { testConnection } from "../lib/supabaseClient";
 
 export default function App() {
   return (
