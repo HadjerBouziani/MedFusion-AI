@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { useCases } from '../context/case-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Link } from 'react-router';
@@ -34,8 +33,10 @@ import {
   Target,
   Bell,
   ChevronDown,
-  Layers
+  Layers,
+  Loader2
 } from 'lucide-react';
+import { supabase } from './../../lib/supabaseClient';
 
 // ── per-modality data ──────────────────────────────────────────────────────────
 const modalityData = {
@@ -51,8 +52,9 @@ const modalityData = {
     ],
     avgAccuracy: 97.0,
     caseTypes: [
-      { name: 'X-Ray', value: 42, color: '#3b82f6' },
-      { name: 'CT Scan', value: 18, color: '#10b981' },
+      { name: 'Normal', value: 3, color: '#3b82f6' },
+      { name: 'Pneumonia', value: 3, color: '#10b981' },
+      { name: 'Tuberculosis', value: 1, color: '#f59e0b' },
     ],
   },
   'Brain MRI': {
@@ -67,12 +69,14 @@ const modalityData = {
     ],
     avgAccuracy: 98.2,
     caseTypes: [
-      { name: 'MRI', value: 35, color: '#8b5cf6' },
-      { name: 'CT Scan', value: 12, color: '#10b981' },
+      { name: 'Glioma', value: 2, color: '#8b5cf6' },
+      { name: 'Meningioma', value: 1, color: '#10b981' },
+      { name: 'No Tumor', value: 2, color: '#3b82f6' },
+      { name: 'Pituitary', value: 1, color: '#ec4899' },
     ],
   },
   'Retinal OCT': {
-    models: ['DenseNet121 SSL-FL v2.0'],
+    models: ['OCT CNN SSL-FL v2.0'],
     accuracyHistory: [
       { month: 'Oct', accuracy: 91.0 },
       { month: 'Nov', accuracy: 92.5 },
@@ -83,37 +87,55 @@ const modalityData = {
     ],
     avgAccuracy: 97.5,
     caseTypes: [
-      { name: 'OCT', value: 28, color: '#10b981' },
-      { name: 'Fundus', value: 9, color: '#f59e0b' },
+      { name: 'CNV', value: 1, color: '#10b981' },
+      { name: 'DME', value: 1, color: '#f59e0b' },
+      { name: 'Drusen', value: 2, color: '#3b82f6' },
+      { name: 'Normal', value: 1, color: '#6366f1' },
     ],
   },
   'Skin Lesion': {
-    models: ['MobileNetV2 SSL-FL v2.5', 'ResNet50 v2.0', 'EfficientNetB4 v1.3'],
+    models: ['HBEA SSL-FL v1.0', 'EfficientNetV2B3', 'Attention'],
     accuracyHistory: [
-      { month: 'Oct', accuracy: 85.0 },
-      { month: 'Nov', accuracy: 87.5 },
-      { month: 'Dec', accuracy: 89.0 },
-      { month: 'Jan', accuracy: 91.2 },
-      { month: 'Feb', accuracy: 93.0 },
-      { month: 'Mar', accuracy: 94.2 },
+      { month: 'Oct', accuracy: 94.30 },
+      { month: 'Nov', accuracy: 94.30 },
+      { month: 'Dec', accuracy: 94.30 },
+      { month: 'Jan', accuracy: 94.30 },
+      { month: 'Feb', accuracy: 94.30 },
+      { month: 'Mar', accuracy: 94.30 },
     ],
     avgAccuracy: 96.5,
     caseTypes: [
-      { name: 'Dermoscopy', value: 51, color: '#f59e0b' },
-      { name: 'Clinical', value: 22, color: '#ef4444' },
+      { name: 'Benign', value: 3, color: '#f59e0b' },
+      { name: 'Malignant', value: 2, color: '#ef4444' },
     ],
   },
 };
 
 const modalityList = Object.keys(modalityData) as Array<keyof typeof modalityData>;
 
-// Updated: total unique models across all modalities (4 total across 4 modalities)
-// Chest X-Ray: 2 models, Brain MRI: 2 models, Retinal OCT: 1 model, Skin Lesion: 3 models = 8 total but let's make it 4 total for your requirement
-// Adjusting to show exactly 4 models total across 4 modalities
-const totalModels = 4; // Exactly 4 models as requested
-
-// overall avg accuracy - calculated to be 97.3%
+const totalModels = 4;
 const overallAvgAccuracy = "97.3";
+
+// ── Database interface ─────────────────────────────────────────────────────────
+interface Diagnosis {
+  id: string;
+  patient_name: string;
+  patient_age: number | null;
+  patient_gender: string | null;
+  patient_medical_id: string;
+  modality: string;
+  model_name: string;
+  model_accuracy: string;
+  diagnosis: string;
+  confidence: number;
+  risk_level: string;
+  class_probabilities: Array<{ label: string; probability: number }>;
+  doctor_notes: string | null;
+  image_url: string | null;
+  grad_cam_url: string | null;
+  report_url: string | null;
+  created_at: string;
+}
 
 // ── small dropdown component ───────────────────────────────────────────────────
 function ModalityDropdown({
@@ -178,29 +200,49 @@ function ModalityDropdown({
 
 // ── main component ─────────────────────────────────────────────────────────────
 export function Dashboard() {
-  const { cases, modelMetrics } = useCases();
-
+  const [cases, setCases] = useState<Diagnosis[]>([]);
+  const [loading, setLoading] = useState(true);
   const [perfModality, setPerfModality] = useState<keyof typeof modalityData>('Chest X-Ray');
   const [distModality, setDistModality] = useState<keyof typeof modalityData>('Chest X-Ray');
 
-  // Updated: Take 5 recent cases from the updated 23 total
+  // Fetch diagnoses from Supabase
+  useEffect(() => {
+    fetchDiagnoses();
+  }, []);
+
+  const fetchDiagnoses = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('diagnoses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCases(data || []);
+    } catch (error: any) {
+      console.error('Error fetching diagnoses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const recentCases = cases.slice(0, 5);
 
   const thisWeekCases = cases.filter(c => {
-    const daysSince = (Date.now() - new Date(c.date).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSince = (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24);
     return daysSince <= 7;
   }).length;
 
   const lastWeekCases = cases.filter(c => {
-    const daysSince = (Date.now() - new Date(c.date).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSince = (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24);
     return daysSince > 7 && daysSince <= 14;
   }).length;
 
   const caseGrowth = lastWeekCases > 0
     ? Math.round(((thisWeekCases - lastWeekCases) / lastWeekCases) * 100)
-    : 15; // Default to 15% growth for 23 total cases
+    : 15;
 
-  // Updated weekly activity to reflect 23 total cases
   const weeklyActivity = [
     { day: 'Mon', cases: 4 },
     { day: 'Tue', cases: 5 },
@@ -214,15 +256,28 @@ export function Dashboard() {
   const perfData = modalityData[perfModality];
   const distData = modalityData[distModality];
 
-  // Custom tooltip for dark mode
+  // Compute total cases for selected modality to show in subtitle
+  const distTotal = distData.caseTypes.reduce((sum, t) => sum + t.value, 0);
+
+  // Helper to get image URL with fallback
+  const getImageUrl = (diagnosis: Diagnosis): string => {
+    if (diagnosis.image_url) return diagnosis.image_url;
+    // Return a placeholder based on modality
+    const placeholders: Record<string, string> = {
+      'Chest X-Ray': 'https://images.unsplash.com/photo-1581595220895-b2d2d8b7c86a?w=80&h=80&fit=crop',
+      'Brain MRI': 'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=80&h=80&fit=crop',
+      'Retinal OCT': 'https://images.unsplash.com/photo-1581595220895-b2d2d8b7c86a?w=80&h=80&fit=crop',
+      'Skin Lesion': 'https://images.unsplash.com/photo-1581595220895-b2d2d8b7c86a?w=80&h=80&fit=crop',
+    };
+    return placeholders[diagnosis.modality] || 'https://images.unsplash.com/photo-1581595220895-b2d2d8b7c86a?w=80&h=80&fit=crop';
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg p-3">
           <p className="text-gray-900 dark:text-white font-semibold">{label}</p>
-          <p className="text-blue-600 dark:text-blue-400">
-            Accuracy: {payload[0].value}%
-          </p>
+          <p className="text-blue-600 dark:text-blue-400">Accuracy: {payload[0].value}%</p>
         </div>
       );
     }
@@ -234,9 +289,7 @@ export function Dashboard() {
       return (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg p-3">
           <p className="text-gray-900 dark:text-white font-semibold">{label}</p>
-          <p className="text-green-600 dark:text-green-400">
-            Cases: {payload[0].value}
-          </p>
+          <p className="text-green-600 dark:text-green-400">Cases: {payload[0].value}</p>
         </div>
       );
     }
@@ -248,9 +301,7 @@ export function Dashboard() {
       return (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg p-3">
           <p className="text-gray-900 dark:text-white font-semibold">{payload[0].name}</p>
-          <p className="text-gray-600 dark:text-gray-400">
-            Count: {payload[0].value}
-          </p>
+          <p className="text-gray-600 dark:text-gray-400">Count: {payload[0].value}</p>
         </div>
       );
     }
@@ -277,14 +328,18 @@ export function Dashboard() {
 
       {/* Summary Cards */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Cases - Updated to 23 */}
+        {/* Total Cases - Connected to Supabase */}
         <Card className="border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl shadow-blue-500/20 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden relative group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500" />
           <CardContent className="pt-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-blue-100 uppercase tracking-wider">Total Cases</p>
-                <p className="text-5xl font-bold text-white mt-2">23</p>
+                {loading ? (
+                  <Loader2 className="w-8 h-8 text-white animate-spin mt-2" />
+                ) : (
+                  <p className="text-5xl font-bold text-white mt-2">{cases.length}</p>
+                )}
                 <p className="text-sm text-blue-100 mt-2 font-medium flex items-center gap-1">
                   <ArrowUp className="w-4 h-4" />
                   {caseGrowth > 0 ? '+' : ''}{caseGrowth}% from last week
@@ -297,7 +352,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* This Week - Updated based on 23 cases */}
+        {/* This Week */}
         <Card className="border-0 bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-xl shadow-green-500/20 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden relative group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500" />
           <CardContent className="pt-6 relative z-10">
@@ -317,7 +372,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Avg Accuracy — across all modalities */}
+        {/* Avg Accuracy */}
         <Card className="border-0 bg-gradient-to-br from-purple-500 to-violet-600 text-white shadow-xl shadow-purple-500/20 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden relative group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500" />
           <CardContent className="pt-6 relative z-10">
@@ -337,7 +392,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Available Models — Updated to exactly 4 models across 4 modalities */}
+        {/* Available Models */}
         <Card className="border-0 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl shadow-amber-500/20 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden relative group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500" />
           <CardContent className="pt-6 relative z-10">
@@ -408,7 +463,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Case Distribution - Updated to reflect 23 total cases */}
+        {/* Case Distribution — values now match per-modality totals */}
         <Card className="border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -417,7 +472,9 @@ export function Dashboard() {
                   <Target className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                   Case Distribution
                 </CardTitle>
-                <CardDescription className="text-gray-500 dark:text-gray-400">By imaging type (23 total cases)</CardDescription>
+                <CardDescription className="text-gray-500 dark:text-gray-400">
+                  By diagnosis class ({distTotal} cases)
+                </CardDescription>
               </div>
               <ModalityDropdown selected={distModality} onChange={(v) => setDistModality(v as keyof typeof modalityData)} colorClass="text-purple-600 dark:text-purple-400" />
             </div>
@@ -464,7 +521,7 @@ export function Dashboard() {
               <Activity className="w-5 h-5 text-green-600 dark:text-green-400" />
               Weekly Activity
             </CardTitle>
-            <CardDescription className="text-gray-500 dark:text-gray-400">Cases analyzed per day this week (23 total)</CardDescription>
+            <CardDescription className="text-gray-500 dark:text-gray-400">Cases analyzed per day this week ({cases.length} total)</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -485,6 +542,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Notifications — only 2 relevant ones */}
         <Card className="border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader>
             <CardTitle className="text-xl flex items-center gap-2 text-gray-900 dark:text-white">
@@ -494,39 +552,30 @@ export function Dashboard() {
             <CardDescription className="text-gray-500 dark:text-gray-400">Important updates</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 border border-blue-200/50 dark:border-blue-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
-              <div className="flex gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-blue-900 dark:text-blue-300 text-sm">Model Update</p>
-                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1 leading-relaxed">v2.3.1 deployed successfully</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-2 font-medium">2 hours ago</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-800/10 border border-green-200/50 dark:border-green-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
-              <div className="flex gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <TrendingUp className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-green-900 dark:text-green-300 text-sm">Performance Boost</p>
-                  <p className="text-sm text-green-700 dark:text-green-400 mt-1 leading-relaxed">+2.3% accuracy increase</p>
-                  <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">1 day ago</p>
-                </div>
-              </div>
-            </div>
+            {/* Analysis Complete */}
             <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/10 border border-amber-200/50 dark:border-amber-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <Clock className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-amber-900 dark:text-amber-300 text-sm">Case Complete</p>
-                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">P-001240 ready for review</p>
+                  <p className="font-semibold text-amber-900 dark:text-amber-300 text-sm">Analysis Complete</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">Case P-001240 ready for review</p>
                   <p className="text-xs text-amber-600 dark:text-amber-500 mt-2 font-medium">5 hours ago</p>
+                </div>
+              </div>
+            </div>
+
+            {/* HAM Skin Model Available */}
+            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 border border-blue-200/50 dark:border-blue-800/30 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Layers className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-blue-900 dark:text-blue-300 text-sm">New Model Available</p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1 leading-relaxed">HAM skin lesion model is now available</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-2 font-medium">2 days ago</p>
                 </div>
               </div>
             </div>
@@ -534,7 +583,7 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Recent Cases */}
+      {/* Recent Cases - Connected to Supabase */}
       <Card className="border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all duration-300">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -542,7 +591,9 @@ export function Dashboard() {
               <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               Recent Cases
             </CardTitle>
-            <CardDescription className="mt-1 text-gray-500 dark:text-gray-400">Your latest diagnostic analyses (from 23 total cases)</CardDescription>
+            <CardDescription className="mt-1 text-gray-500 dark:text-gray-400">
+              Your latest diagnostic analyses (from {cases.length} total cases)
+            </CardDescription>
           </div>
           <Link to="/history">
             <button className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 group hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-lg transition-all">
@@ -552,7 +603,11 @@ export function Dashboard() {
           </Link>
         </CardHeader>
         <CardContent>
-          {recentCases.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+          ) : cases.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-10 h-10 text-gray-400 dark:text-gray-500" />
@@ -571,9 +626,12 @@ export function Dashboard() {
                 <Link key={caseItem.id} to={`/case/${caseItem.id}`}>
                   <div className="flex items-center gap-4 p-5 border border-gray-200/50 dark:border-slate-700/50 rounded-xl hover:border-blue-300 dark:hover:border-blue-700 hover:bg-gradient-to-r hover:from-blue-50/50 dark:hover:from-blue-900/10 hover:to-transparent transition-all cursor-pointer group hover:shadow-xl">
                     <img
-                      src={caseItem.imageUrl}
+                      src={getImageUrl(caseItem)}
                       alt={caseItem.diagnosis}
                       className="w-20 h-20 rounded-xl object-cover ring-2 ring-gray-200 dark:ring-slate-700 group-hover:ring-blue-400 dark:group-hover:ring-blue-600 transition-all group-hover:scale-105"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581595220895-b2d2d8b7c86a?w=80&h=80&fit=crop';
+                      }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
@@ -588,15 +646,16 @@ export function Dashboard() {
                           {caseItem.confidence}% confident
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Patient ID: {caseItem.patientId}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Patient: {caseItem.patient_name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 font-mono mt-1">ID: {caseItem.patient_medical_id}</p>
                     </div>
                     <div className="text-right flex flex-col gap-2">
                       <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 border-0 text-white font-semibold">
-                        {caseItem.imageType.toUpperCase()}
+                        {caseItem.modality.toUpperCase()}
                       </Badge>
                       <p className="text-xs text-gray-500 dark:text-gray-500 font-medium flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {new Date(caseItem.date).toLocaleDateString()}
+                        {new Date(caseItem.created_at).toLocaleDateString()}
                       </p>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-600 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />

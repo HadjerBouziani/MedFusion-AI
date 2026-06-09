@@ -6,26 +6,26 @@ import { Link } from 'react-router';
 
 export function AITeamDashboard() {
   const stats = [
-    { label: 'Assigned Models', value: '5', icon: Brain, color: 'from-blue-500 to-cyan-600', trend: '+2 this month' },
-    { label: 'Completed FL Rounds', value: '18', icon: CheckCircle, color: 'from-green-500 to-emerald-600', trend: '85% success rate' },
-    { label: 'Pending Training Tasks', value: '2', icon: Clock, color: 'from-amber-500 to-orange-600', trend: 'Due in 3 days' },
-    { label: 'Last Upload', value: 'Today', icon: Upload, color: 'from-purple-500 to-indigo-600', trend: '4:32 PM' },
+    { label: 'Assigned Models', value: '4', icon: Brain, color: 'from-blue-500 to-cyan-600', trend: '+2 this month' },
+    { label: 'Completed FL Rounds', value: '17', icon: CheckCircle, color: 'from-green-500 to-emerald-600', trend: '85% success rate' },
+    { label: 'Pending Training Tasks', value: '0', icon: Clock, color: 'from-amber-500 to-orange-600', trend: 'Due in 3 days' },
+    { label: 'Last Upload', value: '6-6-2026', icon: Upload, color: 'from-purple-500 to-indigo-600', trend: '4:32 PM' },
   ];
 
   const participationData = [
-    { model: 'CXR-RN18-v2.1', round: 'Round 15', status: 'Ready to Train', modality: 'Chest X-Ray', accuracy: '97.1%' },
-    { model: 'MRI-EFF-v1.4', round: 'Round 9', status: 'Awaiting Upload', modality: 'Brain MRI', accuracy: '96.8%' },
-    { model: 'OCT-DN121-v2.0', round: 'Round 12', status: 'Uploaded', modality: 'Retinal OCT', accuracy: '97.5%' },
-    { model: 'SKN-MBN-v2.5', round: 'Round 8', status: 'Ready to Train', modality: 'Skin Lesion', accuracy: '94.2%' },
+    { model: 'Chest X-Ray', round: 'Round 3', status: 'Uploaded', modality: 'CXR-RN18-v1.0', accuracy: '97.1%' },
+    { model: 'Brain MRI', round: 'Round 5', status: 'Uploaded', modality: 'MRI-EFF-v1.0', accuracy: '96.8%' },
+    { model: 'Retinal OCT', round: 'Round 5', status: 'Uploaded', modality: 'OCT-DN121-v1.0', accuracy: '97.5%' },
+    { model: 'Skin Lesion', round: 'Round 4', status: 'Uploaded', modality: 'SKN-MBN-v1.0', accuracy: '94.2%' },
   ];
 
   // Federation Stats Data
   const federationStats = {
-    totalParticipants: 28,
-    submitted: 26,
-    onTime: 24,
+    totalParticipants: 17,
+    submitted: 17,
+    onTime: 17,
     yourContribution: 0.24,
-    yourRank: 4
+    yourRank: 1
   };
   
   return (

@@ -1,5 +1,4 @@
 import { useParams, Link } from 'react-router';
-import { useCases } from '../context/case-context';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
@@ -28,9 +27,12 @@ import {
   BarChart3,
   ScanEye,
   Image,
+  Loader2,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { supabase } from './../../lib/supabaseClient';
 
 /* ─── Lightbox Component ─────────────────────────── */
 function Lightbox({
@@ -106,13 +108,107 @@ function Lightbox({
 }
 
 /* ─── Main Page ─────────────────────────────────── */
+interface DiagnosisDetails {
+  id: string;
+  patient_name: string;
+  patient_age: number | null;
+  patient_gender: string | null;
+  patient_medical_id: string;
+  modality: string;
+  model_name: string;
+  model_accuracy: string;
+  diagnosis: string;
+  confidence: number;
+  risk_level: string;
+  class_probabilities: Array<{ label: string; probability: number }>;
+  doctor_notes: string | null;
+  image_url: string | null;
+  grad_cam_url: string | null;
+  report_url: string | null;
+  created_at: string;
+}
+
 export function CaseDetail() {
   const { id } = useParams<{ id: string }>();
-  const { getCaseById } = useCases();
-  const caseData = id ? getCaseById(id) : null;
+  const [caseData, setCaseData] = useState<DiagnosisDetails | null>(null);
+  const [loading, setLoading] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'heatmap' | 'clinical'>('heatmap');
   const [imageView, setImageView] = useState<'original' | 'gradcam'>('original');
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
+  // Fetch diagnosis from Supabase
+  useEffect(() => {
+    fetchDiagnosis();
+  }, [id]);
+
+  const fetchDiagnosis = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('diagnoses')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Case not found');
+      
+      setCaseData(data);
+    } catch (error: any) {
+      console.error('Error fetching diagnosis:', error);
+      toast.error(`Failed to load case: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadReport = async () => {
+    if (!caseData?.report_url) {
+      toast.error('No report available for this case');
+      return;
+    }
+    
+    setDownloadingReport(true);
+    try {
+      // Download the report from Supabase storage
+      const response = await fetch(caseData.report_url);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Medical_Report_${caseData.patient_medical_id}_${new Date(caseData.created_at).toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Report downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      toast.error('Failed to download report');
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+  
+  const downloadImage = () => {
+    if (caseData?.image_url) {
+      const link = document.createElement('a');
+      link.href = caseData.image_url;
+      link.download = `scan-${caseData.patient_medical_id}-${Date.now()}.jpg`;
+      link.click();
+      toast.success('Image downloaded');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto min-h-[60vh] flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+        <p className="text-gray-600 dark:text-gray-400">Loading case details...</p>
+      </div>
+    );
+  }
 
   if (!caseData) {
     return (
@@ -129,15 +225,6 @@ export function CaseDetail() {
       </div>
     );
   }
-
-  const downloadReport = () => toast.success('Report downloaded successfully!');
-  const downloadImage = () => {
-    const link = document.createElement('a');
-    link.href = caseData.imageUrl;
-    link.download = `scan-${caseData.patientId}-${Date.now()}.jpg`;
-    link.click();
-    toast.success('Image downloaded');
-  };
 
   const conf = caseData.confidence;
   const confGradient =
@@ -156,13 +243,18 @@ export function CaseDetail() {
     : 'ring-amber-200 dark:ring-amber-800';
 
   const tabs = ['heatmap', 'clinical'] as const;
+  
+  // Use stored Grad-CAM URL if available, otherwise use original
+  const currentImage = imageView === 'gradcam' && caseData.grad_cam_url 
+    ? caseData.grad_cam_url 
+    : caseData.image_url;
 
   return (
     <>
-      {lightboxOpen && (
+      {lightboxOpen && currentImage && (
         <Lightbox
-          src={caseData.imageUrl}
-          alt={`${caseData.imageType.toUpperCase()} — ${caseData.diagnosis}`}
+          src={currentImage}
+          alt={`${caseData.modality.toUpperCase()} — ${caseData.diagnosis}`}
           onClose={() => setLightboxOpen(false)}
         />
       )}
@@ -180,14 +272,20 @@ export function CaseDetail() {
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span>Cases</span>
               <ChevronRight className="w-4 h-4" />
-              <span className="text-gray-900 dark:text-gray-200 font-medium">{caseData.patientId}</span>
+              <span className="text-gray-900 dark:text-gray-200 font-medium">{caseData.patient_medical_id}</span>
             </div>
           </div>
           <Button
             onClick={downloadReport}
-            className="gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/20"
+            disabled={downloadingReport || !caseData.report_url}
+            className="gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50"
           >
-            <Download className="w-4 h-4" /> Download Report
+            {downloadingReport ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileText className="w-4 h-4" />
+            )}
+            {downloadingReport ? 'Downloading...' : 'Download Report'}
           </Button>
         </div>
 
@@ -202,23 +300,24 @@ export function CaseDetail() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Badge className="bg-white/10 text-white border-white/15 border">
-                  {caseData.imageType.toUpperCase()}
+                  {caseData.modality.toUpperCase()}
                 </Badge>
-                <Badge className={`${
-                  caseData.imageQuality === 'good'
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
-                    : 'bg-amber-500/15 text-amber-300 border-amber-500/25'
-                }`}>
-                  {caseData.imageQuality} quality
+                <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/25">
+                  Good quality
                 </Badge>
+                {caseData.report_url && (
+                  <Badge className="bg-blue-500/15 text-blue-300 border-blue-500/25">
+                    <FileText className="w-3 h-3 mr-1" /> Report Available
+                  </Badge>
+                )}
               </div>
               <h1 className="text-2xl font-bold text-white mb-1">{caseData.diagnosis}</h1>
               <div className="flex items-center gap-3 text-sm text-slate-400">
-                <span>Patient <span className="text-slate-200 font-medium">{caseData.patientId}</span></span>
+                <span>Patient <span className="text-slate-200 font-medium">{caseData.patient_name}</span></span>
                 <span>•</span>
-                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{new Date(caseData.date).toLocaleString()}</span>
+                <span>ID: <span className="text-slate-200 font-mono">{caseData.patient_medical_id}</span></span>
                 <span>•</span>
-                <span className="font-mono text-slate-300">{caseData.modelVersion}</span>
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{new Date(caseData.created_at).toLocaleString()}</span>
               </div>
             </div>
             <div className={`flex-shrink-0 flex flex-col items-center justify-center w-24 h-24 rounded-2xl bg-white/5 border-2 ring-4 ${confRing} border-transparent`}>
@@ -244,57 +343,61 @@ export function CaseDetail() {
                     <Eye className="w-4 h-4 text-white" />
                   </div>
                   <span className="font-semibold text-gray-900 dark:text-white">Medical Image</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{caseData.imageType.toUpperCase()}</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{caseData.modality.toUpperCase()}</span>
                 </div>
 
-                {/* View toggle pill */}
-                <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
-                  <button
-                    onClick={() => setImageView('original')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      imageView === 'original'
-                        ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                  >
-                    <Image className="w-4 h-4" /> Original
-                  </button>
-                  <button
-                    onClick={() => setImageView('gradcam')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      imageView === 'gradcam'
-                        ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                  >
-                    <Zap className="w-4 h-4" /> Grad-CAM
-                    <Badge className="ml-0.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 border-0 text-xs px-1.5">XAI</Badge>
-                  </button>
-                </div>
+                {/* View toggle pill - only show if Grad-CAM exists */}
+                {caseData.grad_cam_url && (
+                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setImageView('original')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                        imageView === 'original'
+                          ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      <Image className="w-4 h-4" /> Original
+                    </button>
+                    <button
+                      onClick={() => setImageView('gradcam')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                        imageView === 'gradcam'
+                          ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      <Zap className="w-4 h-4" /> Grad-CAM
+                      <Badge className="ml-0.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 border-0 text-xs px-1.5">XAI</Badge>
+                    </button>
+                  </div>
+                )}
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={downloadImage}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                    disabled={!caseData.image_url}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ImageDown className="w-4 h-4" /> Save
                   </button>
                   <button
                     onClick={() => setLightboxOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                    disabled={!currentImage}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Maximize2 className="w-4 h-4" /> Open
                   </button>
                 </div>
               </div>
 
-              {/* Image canvas — switches between original and heatmap */}
+              {/* Image canvas */}
               <div className="relative bg-slate-950" style={{ minHeight: '320px' }}>
-                {imageView === 'original' ? (
+                {currentImage ? (
                   <div className="relative group cursor-pointer" onClick={() => setLightboxOpen(true)}>
                     <img
-                      src={caseData.imageUrl}
+                      src={currentImage}
                       alt={caseData.diagnosis}
                       className="w-full object-cover"
                       style={{ maxHeight: '360px', objectFit: 'cover' }}
@@ -307,32 +410,17 @@ export function CaseDetail() {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4">
-                    {/* Grad-CAM legend bar */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <ScanEye className="w-4 h-4 text-rose-400" />
-                        <span className="text-sm text-slate-400 font-medium">AI attention map</span>
-                      </div>
-                      <div className="flex-1 flex items-center gap-2 ml-auto justify-end">
-                        {[
-                          { color: 'bg-blue-400', label: 'Low' },
-                          { color: 'bg-yellow-400', label: 'Med' },
-                          { color: 'bg-red-500', label: 'High' },
-                        ].map(({ color, label }) => (
-                          <div key={label} className="flex items-center gap-1">
-                            <div className={`w-5 h-2.5 rounded-sm ${color}`} />
-                            <span className="text-xs text-slate-500">{label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="rounded-xl overflow-hidden">
-                      <HeatmapVisualization
-                        imageUrl={caseData.imageUrl}
-                        heatmapData={caseData.heatmapData}
-                      />
-                    </div>
+                  <div className="flex items-center justify-center h-80 bg-gray-900">
+                    <p className="text-gray-500">No image available</p>
+                  </div>
+                )}
+                
+                {/* Grad-CAM overlay indicator */}
+                {imageView === 'gradcam' && caseData.grad_cam_url && (
+                  <div className="absolute top-4 left-4 bg-rose-500/80 backdrop-blur-sm rounded-lg px-3 py-1.5">
+                    <span className="text-white text-xs font-medium flex items-center gap-1">
+                      <Zap className="w-3 h-3" /> AI Attention Map
+                    </span>
                   </div>
                 )}
               </div>
@@ -341,16 +429,14 @@ export function CaseDetail() {
               <div className="flex items-center gap-3 px-5 py-3 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-200 dark:border-slate-700">
                 <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
                   <Calendar className="w-4 h-4" />
-                  {new Date(caseData.date).toLocaleDateString()}
+                  {new Date(caseData.created_at).toLocaleDateString()}
                 </div>
                 <span className="text-gray-300 dark:text-slate-600">•</span>
-                <div className={`flex items-center gap-1.5 text-sm font-medium ${
-                  caseData.imageQuality === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
-                }`}>
+                <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  {caseData.imageQuality} quality
+                  Good quality
                 </div>
-                {imageView === 'gradcam' && (
+                {imageView === 'gradcam' && caseData.grad_cam_url && (
                   <>
                     <span className="text-gray-300 dark:text-slate-600">•</span>
                     <span className="text-sm text-rose-500 dark:text-rose-400 flex items-center gap-1">
@@ -358,7 +444,7 @@ export function CaseDetail() {
                     </span>
                   </>
                 )}
-                <span className="ml-auto text-sm text-gray-500 dark:text-gray-500 font-mono">{caseData.modelVersion}</span>
+                <span className="ml-auto text-sm text-gray-500 dark:text-gray-500 font-mono">{caseData.model_name}</span>
               </div>
             </div>
 
@@ -371,8 +457,8 @@ export function CaseDetail() {
                 <span className="font-semibold text-gray-900 dark:text-white">Confidence Breakdown</span>
               </div>
               <div className="p-5 grid sm:grid-cols-2 gap-3">
-                {caseData.allPredictions.map((pred, idx) => {
-                  const isPrimary = pred.class === caseData.diagnosis;
+                {caseData.class_probabilities.map((pred, idx) => {
+                  const isPrimary = pred.label === caseData.diagnosis;
                   return (
                     <div
                       key={idx}
@@ -386,12 +472,12 @@ export function CaseDetail() {
                         <span className={`text-sm font-semibold truncate mr-2 ${
                           isPrimary ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-400'
                         }`}>
-                          {pred.class}
+                          {pred.label}
                         </span>
                         <span className={`text-sm font-bold flex-shrink-0 ${
                           isPrimary ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
                         }`}>
-                          {pred.confidence}%
+                          {pred.probability}%
                         </span>
                       </div>
                       <div className="w-full h-2 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
@@ -401,7 +487,7 @@ export function CaseDetail() {
                               ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
                               : 'bg-gray-300 dark:bg-slate-500'
                           }`}
-                          style={{ width: `${pred.confidence}%`, transition: 'width 0.6s ease' }}
+                          style={{ width: `${pred.probability}%`, transition: 'width 0.6s ease' }}
                         />
                       </div>
                     </div>
@@ -439,19 +525,16 @@ export function CaseDetail() {
                       {conf}% confidence
                     </Badge>
                     <Badge variant="outline" className="text-sm">
-                      {caseData.imageType.toUpperCase()}
+                      {caseData.modality.toUpperCase()}
+                    </Badge>
+                    <Badge className={`text-sm border-0 ${
+                      caseData.risk_level === 'High' ? 'bg-red-500' :
+                      caseData.risk_level === 'Moderate' ? 'bg-amber-500' : 'bg-green-500'
+                    } text-white`}>
+                      {caseData.risk_level} Risk
                     </Badge>
                   </div>
                 </div>
-                {caseData.uncertaintyWarning && (
-                  <Alert className="border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-xl py-3">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertTitle className="text-amber-800 dark:text-amber-300 font-semibold">Warning</AlertTitle>
-                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm mt-0.5">
-                      {caseData.uncertaintyWarning}
-                    </AlertDescription>
-                  </Alert>
-                )}
               </div>
             </div>
 
@@ -464,32 +547,47 @@ export function CaseDetail() {
                 <span className="font-semibold text-gray-900 dark:text-white">Case Information</span>
               </div>
               <div className="divide-y divide-gray-100 dark:divide-slate-700">
-                {[
-                  { label: 'Patient ID', value: caseData.patientId, mono: true },
-                  {
-                    label: 'Image Quality',
-                    el: (
-                      <Badge className={`text-sm capitalize ${
-                        caseData.imageQuality === 'good'
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
-                      }`}>
-                        {caseData.imageQuality}
-                      </Badge>
-                    ),
-                  },
-                  { label: 'Model', value: caseData.modelVersion, mono: true },
-                  { label: 'Date', value: new Date(caseData.date).toLocaleDateString() },
-                ].map(({ label, value, mono, el }) => (
-                  <div key={label} className="flex items-center justify-between px-5 py-3">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
-                    {el ?? (
-                      <span className={`text-sm font-semibold text-gray-900 dark:text-gray-200 ${mono ? 'font-mono' : ''}`}>
-                        {value}
-                      </span>
-                    )}
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Patient Name</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">{caseData.patient_name}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Medical ID</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-200 font-mono">{caseData.patient_medical_id}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Age / Gender</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">
+                    {caseData.patient_age || '—'} yrs / {caseData.patient_gender || '—'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Model</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-200 font-mono">{caseData.model_name}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Model Accuracy</span>
+                  <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{caseData.model_accuracy}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Date</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">
+                    {new Date(caseData.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                {caseData.report_url && (
+                  <div className="flex items-center justify-between px-5 py-3">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">Report</span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={downloadReport}
+                      className="text-blue-600 dark:text-blue-400 p-0 h-auto"
+                    >
+                      <FileText className="w-3 h-3 mr-1" /> Download PDF
+                    </Button>
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
@@ -513,18 +611,19 @@ export function CaseDetail() {
               <div className="p-5">
                 {activeTab === 'heatmap' ? (
                   <div className="space-y-4">
-                    {/* Quick shortcut to switch to Grad-CAM view */}
-                    <button
-                      onClick={() => setImageView('gradcam')}
-                      className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
-                        imageView === 'gradcam'
-                          ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400'
-                          : 'bg-gray-50 dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-400 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
-                      }`}
-                    >
-                      <Zap className="w-4 h-4 flex-shrink-0" />
-                      {imageView === 'gradcam' ? 'Grad-CAM view is active ✓' : 'Click to switch to Grad-CAM view →'}
-                    </button>
+                    {caseData.grad_cam_url && (
+                      <button
+                        onClick={() => setImageView('gradcam')}
+                        className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                          imageView === 'gradcam'
+                            ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400'
+                            : 'bg-gray-50 dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-400 hover:border-rose-200 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400'
+                        }`}
+                      >
+                        <Zap className="w-4 h-4 flex-shrink-0" />
+                        {imageView === 'gradcam' ? 'Grad-CAM view is active ✓' : 'Click to switch to Grad-CAM view →'}
+                      </button>
+                    )}
                     <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                       <div className="w-1 rounded-full bg-gradient-to-b from-blue-500 to-indigo-500 flex-shrink-0" />
                       <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">
@@ -551,7 +650,7 @@ export function CaseDetail() {
                     <div className="relative p-4 bg-gray-50 dark:bg-slate-700/40 rounded-xl border border-gray-200 dark:border-slate-600">
                       <div className="absolute top-4 left-4 w-0.5 h-8 rounded-full bg-gradient-to-b from-teal-500 to-emerald-500" />
                       <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed pl-4">
-                        {caseData.clinicalExplanation}
+                        {caseData.doctor_notes || 'No clinical notes provided for this case.'}
                       </p>
                     </div>
                     <div className="flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
@@ -566,11 +665,6 @@ export function CaseDetail() {
             </div>
           </div>
         </div>
-
-        {/* ── Similar Cases ── */}
-        {caseData.similarCases && caseData.similarCases.length > 0 && (
-          <SimilarCasesPanel cases={caseData.similarCases} />
-        )}
       </div>
     </>
   );
