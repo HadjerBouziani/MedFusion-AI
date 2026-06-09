@@ -39,30 +39,8 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       version: 'v2.1',
       status: 'Active',
       downloadDate: '2024-01-20',
-      aggregationRound: 15,
+      aggregationRound: 3,
       accuracy: '97.1%',
-      color: 'from-blue-500 to-cyan-600'
-    },
-    {
-      id: 'CXR-RN18-v2.0',
-      modality: 'Chest X-Ray',
-      architecture: 'ResNet18 SSL-FL',
-      version: 'v2.0',
-      status: 'Deprecated',
-      downloadDate: '2024-01-10',
-      aggregationRound: 12,
-      accuracy: '96.5%',
-      color: 'from-blue-500 to-cyan-600'
-    },
-    {
-      id: 'CXR-RN18-v1.9',
-      modality: 'Chest X-Ray',
-      architecture: 'ResNet18 SSL-FL',
-      version: 'v1.9',
-      status: 'Archived',
-      downloadDate: '2023-12-28',
-      aggregationRound: 10,
-      accuracy: '95.8%',
       color: 'from-blue-500 to-cyan-600'
     },
   ],
@@ -74,19 +52,8 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       version: 'v1.4',
       status: 'Active',
       downloadDate: '2024-01-18',
-      aggregationRound: 9,
+      aggregationRound: 5,
       accuracy: '96.8%',
-      color: 'from-purple-500 to-indigo-600'
-    },
-    {
-      id: 'MRI-EFF-v1.3',
-      modality: 'Brain MRI',
-      architecture: 'EfficientNetV2',
-      version: 'v1.3',
-      status: 'Deprecated',
-      downloadDate: '2024-01-08',
-      aggregationRound: 7,
-      accuracy: '96.1%',
       color: 'from-purple-500 to-indigo-600'
     },
   ],
@@ -98,9 +65,22 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       version: 'v2.0',
       status: 'Active',
       downloadDate: '2024-01-15',
-      aggregationRound: 12,
+      aggregationRound: 4,
       accuracy: '97.5%',
       color: 'from-green-500 to-emerald-600'
+    },
+  ],
+  'Skin Lesion': [
+    {
+      id: 'SKIN-EFF',
+      modality: 'Skin Lesion',
+      architecture: 'EfficientNetV2 SSL-FL',
+      version: 'v1.0',
+      status: 'Active',
+      downloadDate: '2024-01-25',
+      aggregationRound: 4,
+      accuracy: '94.2%',
+      color: 'from-pink-500 to-rose-600'
     },
   ],
 };
@@ -109,43 +89,36 @@ const modelList = [
   { id: 'Chest X-Ray', dotColor: 'bg-amber-500', iconColor: 'text-amber-500' },
   { id: 'Brain MRI', dotColor: 'bg-purple-500', iconColor: 'text-purple-500' },
   { id: 'Retinal OCT', dotColor: 'bg-green-500', iconColor: 'text-green-500' },
+  { id: 'Skin Lesion', dotColor: 'bg-pink-500', iconColor: 'text-pink-500' },
 ];
 
 const downloadHistoryData: Record<string, any[]> = {
   'Chest X-Ray': [
-    { version: 'v2.1', date: '2024-01-20', round: 15, status: 'Trained & Uploaded' },
-    { version: 'v2.0', date: '2024-01-10', round: 12, status: 'Trained & Uploaded' },
-    { version: 'v1.9', date: '2023-12-28', round: 10, status: 'Trained & Uploaded' },
-    { version: 'v1.8', date: '2023-12-15', round: 8, status: 'Trained & Uploaded' },
+    { version: 'v2.1', date: '2024-01-20', round: 3, status: 'Trained & Uploaded' },
   ],
   'Brain MRI': [
-    { version: 'v1.4', date: '2024-01-18', round: 9, status: 'Trained & Uploaded' },
-    { version: 'v1.3', date: '2024-01-08', round: 7, status: 'Trained & Uploaded' },
-    { version: 'v1.2', date: '2023-12-20', round: 5, status: 'Trained & Uploaded' },
+    { version: 'v1.4', date: '2024-01-18', round: 5, status: 'Trained & Uploaded' },
   ],
   'Retinal OCT': [
-    { version: 'v2.0', date: '2024-01-15', round: 12, status: 'Trained & Uploaded' },
-    { version: 'v1.9', date: '2024-01-05', round: 10, status: 'Trained & Uploaded' },
-    { version: 'v1.8', date: '2023-12-22', round: 8, status: 'Trained & Uploaded' },
+    { version: 'v2.0', date: '2024-01-15', round: 4, status: 'Trained & Uploaded' },
+  ],
+  'Skin Lesion': [
+    { version: 'v1.0', date: '2024-01-25', round: 4, status: 'Trained & Uploaded' },
   ],
 };
 
 const aggregationHistoryData: Record<string, any[]> = {
   'Chest X-Ray': [
-    { round: 15, date: '2024-01-22', contributionWeight: 0.24, globalAccuracy: '97.1%', improvement: '+0.8%' },
-    { round: 12, date: '2024-01-12', contributionWeight: 0.21, globalAccuracy: '96.5%', improvement: '+0.7%' },
-    { round: 10, date: '2023-12-30', contributionWeight: 0.18, globalAccuracy: '95.8%', improvement: '+0.6%' },
-    { round: 8, date: '2023-12-17', contributionWeight: 0.15, globalAccuracy: '95.2%', improvement: '+0.5%' },
+    { round: 3, date: '2024-01-22', contributionWeight: 0.24, globalAccuracy: '97.1%', improvement: '+0.8%' },
   ],
   'Brain MRI': [
-    { round: 9, date: '2024-01-20', contributionWeight: 0.19, globalAccuracy: '96.8%', improvement: '+0.7%' },
-    { round: 7, date: '2024-01-10', contributionWeight: 0.16, globalAccuracy: '96.1%', improvement: '+0.6%' },
-    { round: 5, date: '2023-12-22', contributionWeight: 0.13, globalAccuracy: '95.5%', improvement: '+0.5%' },
+    { round: 5, date: '2024-01-20', contributionWeight: 0.19, globalAccuracy: '96.8%', improvement: '+0.7%' },
   ],
   'Retinal OCT': [
-    { round: 12, date: '2024-01-17', contributionWeight: 0.27, globalAccuracy: '97.5%', improvement: '+0.6%' },
-    { round: 10, date: '2024-01-07', contributionWeight: 0.24, globalAccuracy: '96.9%', improvement: '+0.5%' },
-    { round: 8, date: '2023-12-24', contributionWeight: 0.21, globalAccuracy: '96.3%', improvement: '+0.5%' },
+    { round: 4, date: '2024-01-17', contributionWeight: 0.27, globalAccuracy: '97.5%', improvement: '+0.6%' },
+  ],
+  'Skin Lesion': [
+    { round: 4, date: '2024-01-27', contributionWeight: 0.22, globalAccuracy: '94.2%', improvement: '+0.5%' },
   ],
 };
 
@@ -342,7 +315,7 @@ export function ModelVersions() {
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Downloaded</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Accuracy</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
-                 </tr>
+                </tr>
               </thead>
               <tbody>
                 {modelVersions.map((model) => (

@@ -26,14 +26,13 @@ const modelsData = {
     currentSSL: 0.91,
     startSSL: 0.51,
     sslChange: '+78%',
-    ranking: '#4',
+    ranking: '#1',
     rankingLabel: 'Top 15%',
     participants: 28,
     contributionEvolution: [
       { round: 1, weight: 0.08, sslQuality: 0.51 },
-      { round: 5, weight: 0.14, sslQuality: 0.72 },
-      { round: 10, weight: 0.21, sslQuality: 0.87 },
-      { round: 15, weight: 0.24, sslQuality: 0.91 },
+      { round: 2, weight: 0.14, sslQuality: 0.72 },
+      { round: 3, weight: 0.24, sslQuality: 0.91 },
     ],
     modelComparisons: [
       { metric: 'Accuracy', local: '96.1%', global: '97.0%', improvement: '+0.9%' },
@@ -58,14 +57,15 @@ const modelsData = {
     currentSSL: 0.88,
     startSSL: 0.48,
     sslChange: '+83%',
-    ranking: '#6',
+    ranking: '#2',
     rankingLabel: 'Top 22%',
     participants: 28,
     contributionEvolution: [
       { round: 1, weight: 0.06, sslQuality: 0.48 },
-      { round: 3, weight: 0.10, sslQuality: 0.63 },
-      { round: 6, weight: 0.15, sslQuality: 0.76 },
-      { round: 9, weight: 0.19, sslQuality: 0.88 },
+      { round: 2, weight: 0.10, sslQuality: 0.63 },
+      { round: 3, weight: 0.15, sslQuality: 0.76 },
+      { round: 4, weight: 0.19, sslQuality: 0.88 },
+      { round: 5, weight: 0.19, sslQuality: 0.88 },
     ],
     modelComparisons: [
       { metric: 'Accuracy', local: '95.8%', global: '96.5%', improvement: '+0.7%' },
@@ -95,9 +95,10 @@ const modelsData = {
     participants: 28,
     contributionEvolution: [
       { round: 1, weight: 0.09, sslQuality: 0.55 },
-      { round: 4, weight: 0.15, sslQuality: 0.72 },
-      { round: 8, weight: 0.22, sslQuality: 0.85 },
-      { round: 12, weight: 0.27, sslQuality: 0.93 },
+      { round: 2, weight: 0.15, sslQuality: 0.72 },
+      { round: 3, weight: 0.22, sslQuality: 0.85 },
+      { round: 4, weight: 0.27, sslQuality: 0.93 },
+      { round: 5, weight: 0.27, sslQuality: 0.93 },
     ],
     modelComparisons: [
       { metric: 'Accuracy', local: '97.2%', global: '97.8%', improvement: '+0.6%' },
@@ -122,14 +123,14 @@ const modelsData = {
     currentSSL: 0.82,
     startSSL: 0.44,
     sslChange: '+86%',
-    ranking: '#11',
+    ranking: '#3',
     rankingLabel: 'Top 40%',
     participants: 28,
     contributionEvolution: [
       { round: 1, weight: 0.07, sslQuality: 0.44 },
-      { round: 3, weight: 0.09, sslQuality: 0.58 },
-      { round: 5, weight: 0.12, sslQuality: 0.71 },
-      { round: 8, weight: 0.15, sslQuality: 0.82 },
+      { round: 2, weight: 0.12, sslQuality: 0.71 },
+      { round: 3, weight: 0.15, sslQuality: 0.82 },
+      { round: 4, weight: 0.15, sslQuality: 0.82 },
     ],
     modelComparisons: [
       { metric: 'Accuracy', local: '93.1%', global: '94.2%', improvement: '+1.1%' },
@@ -341,12 +342,12 @@ export function ContributionInsights() {
                           </div>
                           <span className="font-medium text-gray-900 dark:text-white">Round {item.round}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="text-right py-4 px-4">
                         <span className={`font-mono font-bold text-lg ${getWeightColor(item.weight)}`}>
                           {item.weight.toFixed(2)}
                         </span>
-                      </td>
+                       </td>
                       <td className="text-right py-4 px-4">
                         {index > 0 && (
                           <Badge className="bg-green-100 text-green-700 border-green-300 border">
@@ -354,7 +355,7 @@ export function ContributionInsights() {
                             +{((item.weight - data.contributionEvolution[index - 1].weight) * 100).toFixed(0)}%
                           </Badge>
                         )}
-                      </td>
+                       </td>
                     </tr>
                   ))}
                 </tbody>
@@ -393,12 +394,12 @@ export function ContributionInsights() {
                           </div>
                           <span className="font-medium text-gray-900 dark:text-white">Round {item.round}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="text-right py-4 px-4">
                         <span className={`font-mono font-bold text-lg ${getSSLColor(item.sslQuality)}`}>
                           {item.sslQuality.toFixed(2)}
                         </span>
-                      </td>
+                       </td>
                       <td className="text-right py-4 px-4">
                         {index > 0 && (
                           <Badge className="bg-green-100 text-green-700 border-green-300 border">
@@ -406,7 +407,7 @@ export function ContributionInsights() {
                             +{((item.sslQuality - data.contributionEvolution[index - 1].sslQuality) * 100).toFixed(0)}%
                           </Badge>
                         )}
-                      </td>
+                       </td>
                     </tr>
                   ))}
                 </tbody>
@@ -435,7 +436,7 @@ export function ContributionInsights() {
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Local</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Global</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Improvement</th>
-                </tr>
+                 </tr>
               </thead>
               <tbody>
                 {data.modelComparisons.map((item, index) => (
@@ -448,7 +449,7 @@ export function ContributionInsights() {
                         {item.improvement}
                       </Badge>
                     </td>
-                  </tr>
+                   </tr>
                 ))}
               </tbody>
             </table>

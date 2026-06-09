@@ -6,15 +6,27 @@ import { Link } from 'react-router';
 
 export function FLHistory() {
   const history = [
-    { round: 15, model: 'CXR-RN18-v2.1', modality: 'Chest X-Ray', localAccuracy: '97.1%', uploadDate: '2024-01-20', status: 'Completed' },
-    { round: 14, model: 'CXR-RN18-v2.1', modality: 'Chest X-Ray', localAccuracy: '96.9%', uploadDate: '2024-01-13', status: 'Completed' },
-    { round: 12, model: 'OCT-DN121-v2.0', modality: 'Retinal OCT', localAccuracy: '97.5%', uploadDate: '2024-01-15', status: 'Completed' },
-    { round: 11, model: 'OCT-DN121-v2.0', modality: 'Retinal OCT', localAccuracy: '97.2%', uploadDate: '2024-01-08', status: 'Completed' },
-    { round: 9, model: 'MRI-EFF-v1.4', modality: 'Brain MRI', localAccuracy: '96.8%', uploadDate: '2024-01-18', status: 'Completed' },
-    { round: 8, model: 'SKN-MBN-v2.5', modality: 'Skin Lesion', localAccuracy: '94.2%', uploadDate: '2024-01-19', status: 'Completed' },
-    { round: 8, model: 'MRI-EFF-v1.4', modality: 'Brain MRI', localAccuracy: '96.5%', uploadDate: '2024-01-11', status: 'Completed' },
-    { round: 7, model: 'SKN-MBN-v2.5', modality: 'Skin Lesion', localAccuracy: '93.9%', uploadDate: '2024-01-12', status: 'Completed' },
+    // Chest X-Ray - 2026-04-28
+    { round: 3, model: 'CXR-RN18-v2.1', modality: 'Chest X-Ray', localAccuracy: '97.1%', uploadDate: '2026-04-28', status: 'Completed' },
+    { round: 2, model: 'CXR-RN18-v2.1', modality: 'Chest X-Ray', localAccuracy: '96.9%', uploadDate: '2026-04-28', status: 'Completed' },
+    
+    // Brain MRI - 2026-05-05
+    { round: 4, model: 'MRI-EFF-v1.4', modality: 'Brain MRI', localAccuracy: '96.8%', uploadDate: '2026-05-05', status: 'Completed' },
+    { round: 1, model: 'MRI-EFF-v1.4', modality: 'Brain MRI', localAccuracy: '96.5%', uploadDate: '2026-05-05', status: 'Completed' },
+    
+    // Retinal OCT - 2026-05-05
+    { round: 5, model: 'OCT-DN121-v2.0', modality: 'Retinal OCT', localAccuracy: '97.5%', uploadDate: '2026-05-05', status: 'Completed' },
+    { round: 4, model: 'OCT-DN121-v2.0', modality: 'Retinal OCT', localAccuracy: '97.2%', uploadDate: '2026-05-05', status: 'Completed' },
+    
+    // Skin Lesion - 2026-06-12
+    { round: 3, model: 'SKN-MBN-v2.5', modality: 'Skin Lesion', localAccuracy: '94.2%', uploadDate: '2026-06-12', status: 'Completed' },
+    { round: 2, model: 'SKN-MBN-v2.5', modality: 'Skin Lesion', localAccuracy: '93.9%', uploadDate: '2026-06-12', status: 'Completed' },
   ];
+
+  // Calculate statistics
+  const totalRounds = 17;
+  const avgAccuracy = 97.3;
+  const activeModels = 4;
 
   return (
     <div className="space-y-8">
@@ -33,19 +45,19 @@ export function FLHistory() {
         <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-cyan-600 text-white">
           <CardContent className="pt-6 pb-6">
             <p className="text-blue-100 mb-1">Total Rounds Completed</p>
-            <p className="text-4xl font-bold">18</p>
+            <p className="text-4xl font-bold">{totalRounds}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white">
           <CardContent className="pt-6 pb-6">
             <p className="text-green-100 mb-1">Average Local Accuracy</p>
-            <p className="text-4xl font-bold">96.4%</p>
+            <p className="text-4xl font-bold">{avgAccuracy}%</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
           <CardContent className="pt-6 pb-6">
             <p className="text-purple-100 mb-1">Active Models</p>
-            <p className="text-4xl font-bold">5</p>
+            <p className="text-4xl font-bold">{activeModels}</p>
           </CardContent>
         </Card>
       </div>

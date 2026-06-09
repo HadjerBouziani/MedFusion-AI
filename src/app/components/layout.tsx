@@ -167,7 +167,7 @@ export function Layout() {
             <Link to="/profile">
               <div className={`flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gradient-to-r hover:from-gray-100 hover:to-gray-50 dark:hover:from-slate-800 dark:hover:to-slate-800/50 transition-all cursor-pointer group ${isCollapsed ? 'justify-center' : ''}`}>
                 <Avatar className="ring-2 ring-blue-500/30 group-hover:ring-blue-500/50 transition-all">
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">SJ</AvatarFallback>
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">HB</AvatarFallback>
                 </Avatar>
                 {!isCollapsed && (
                   <div className="flex-1 min-w-0">
@@ -229,7 +229,7 @@ export function Layout() {
               <Link to="/profile" onClick={() => setIsMobileSidebarOpen(false)}>
                 <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800">
                   <Avatar className="ring-2 ring-blue-500/30">
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">SJ</AvatarFallback>
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">HB</AvatarFallback>
                   </Avatar>
                   <div>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">Dr. Hadjer Bouziani</p>
@@ -360,7 +360,7 @@ export function Layout() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-2 hidden lg:flex hover:bg-white/80 dark:hover:bg-slate-800 transition-all">
                     <Avatar className="w-8 h-8 ring-2 ring-blue-500/30">
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-semibold">SJ</AvatarFallback>
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-semibold">HB</AvatarFallback>
                     </Avatar>
                     <span className="text-sm font-medium text-gray-900 dark:text-white">Dr. Hadjer</span>
                   </Button>
