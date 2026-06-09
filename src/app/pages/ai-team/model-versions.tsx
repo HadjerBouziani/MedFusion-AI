@@ -38,7 +38,7 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       architecture: 'ResNet18 SSL-FL',
       version: 'v2.1',
       status: 'Active',
-      downloadDate: '2024-01-20',
+      downloadDate: '2026-06-02',
       aggregationRound: 3,
       accuracy: '97.1%',
       color: 'from-blue-500 to-cyan-600'
@@ -51,7 +51,7 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       architecture: 'EfficientNetV2',
       version: 'v1.4',
       status: 'Active',
-      downloadDate: '2024-01-18',
+      downloadDate: '2026-05-18',
       aggregationRound: 5,
       accuracy: '96.8%',
       color: 'from-purple-500 to-indigo-600'
@@ -64,7 +64,7 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       architecture: 'DenseNet121 SSL-FL',
       version: 'v2.0',
       status: 'Active',
-      downloadDate: '2024-01-15',
+      downloadDate: '2026-05-15',
       aggregationRound: 4,
       accuracy: '97.5%',
       color: 'from-green-500 to-emerald-600'
@@ -77,7 +77,7 @@ const modelVersionsData: Record<string, ModelVersion[]> = {
       architecture: 'EfficientNetV2 SSL-FL',
       version: 'v1.0',
       status: 'Active',
-      downloadDate: '2024-01-25',
+      downloadDate: '2026-05-25',
       aggregationRound: 4,
       accuracy: '94.2%',
       color: 'from-pink-500 to-rose-600'
