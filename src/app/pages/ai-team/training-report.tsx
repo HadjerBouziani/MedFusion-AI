@@ -13,7 +13,7 @@ export function TrainingReportViewer() {
     hospital_id: "hospital_03",
     modality: "Brain MRI",
     architecture: "EfficientNetV2",
-    global_model_version: "v1.4",
+    global_model_version: "v1.0",
     dataset_name: "Local MRI Dataset",
     train_samples: 4200,
     validation_samples: 600,
@@ -22,9 +22,9 @@ export function TrainingReportViewer() {
     local_f1: 95.9,
     ssl_divergence: 0.12,
     training_time_minutes: 83,
-    round: 9,
-    upload_date: "2024-01-20",
-    gpu_info: "NVIDIA A100 40GB"
+    round: 4,
+    upload_date: "2026-05-20",
+    gpu_info: "NVIDIA Dual T4"
   };
 
   const handleGoBack = () => {

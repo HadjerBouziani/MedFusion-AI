@@ -27,10 +27,10 @@ export function RoundDetails() {
   const roundInfo = {
     roundNumber: parseInt(roundNumber),
     model: 'Chest X-Ray ResNet18 SSL-FL',
-    version: 'v2.1',
-    startDate: 'May 10, 2024',
-    trainingDeadline: 'May 15, 2024',
-    aggregationComplete: 'May 16, 2024',
+    version: 'v1.0',
+    startDate: 'May 10, 2026',
+    trainingDeadline: 'May 15, 2026',
+    aggregationComplete: 'May 16, 2026',
     status: 'Completed',
     color: 'from-blue-500 to-cyan-600'
   };
@@ -50,11 +50,11 @@ export function RoundDetails() {
   ];
 
   const participationStats = {
-    totalParticipants: 28,
-    submitted: 26,
-    onTime: 24,
+    totalParticipants: 17,
+    submitted: 17,
+    onTime: 17,
     yourContribution: 0.24,
-    yourRank: 4
+    yourRank: 1
   };
 
   const handleGoBack = () => {
