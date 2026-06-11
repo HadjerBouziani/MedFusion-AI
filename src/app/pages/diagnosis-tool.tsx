@@ -1253,7 +1253,7 @@ export function DiagnosisTool() {
       </div>
 
       {/* Navigation */}
-      <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky bottom-4 z-30">
+      <Card className="border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur sticky bottom-14 z-30">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-between">
             <Button variant="outline" size="lg" onClick={() => setCurrentStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>
