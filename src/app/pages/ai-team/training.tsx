@@ -15,7 +15,7 @@ export function Training() {
       round: 3,
       status: 'Uploaded',
       color: 'from-amber-500 to-orange-600',
-      lastDownload: '2024-01-20',
+      lastDownload: '2026-05-20',
       prevAccuracy: '97.1%',
       canUpload: true
     },
@@ -28,7 +28,7 @@ export function Training() {
       round: 5,
       status: 'Uploaded',
       color: 'from-purple-500 to-indigo-600',
-      lastDownload: '2024-01-18',
+      lastDownload: '2026-05-18',
       prevAccuracy: '96.8%',
       canUpload: true
     },
@@ -41,7 +41,7 @@ export function Training() {
       round: 5,
       status: 'Uploaded',
       color: 'from-green-500 to-emerald-600',
-      lastDownload: '2024-01-15',
+      lastDownload: '2026-05-15',
       prevAccuracy: '97.5%',
       canUpload: false
     },
@@ -54,7 +54,7 @@ export function Training() {
       round: 4,
       status: 'Uploaded',
       color: 'from-amber-500 to-orange-600',
-      lastDownload: '2024-01-19',
+      lastDownload: '2026-05-19',
       prevAccuracy: '94.2%',
       canUpload: false
     },
