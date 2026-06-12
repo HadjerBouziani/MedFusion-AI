@@ -82,8 +82,14 @@ const UNKNOWN_RESULT = {
   gradCamSrc: null,
 };
 
+// ── CHANGED: if the filename is Te-aug-me_26.jpg but modality is NOT Brain MRI,
+//    return unknown with gradCamSrc set to 'USE_UPLOADED' sentinel so runAnalysis
+//    knows to use the uploaded image as-is instead of generating a synthetic one.
 function getFakeBackendResult(modality: string, filename: string) {
   const key = `${modality}::${filename}`;
+  if (filename === 'Te-aug-me_26.jpg' && modality !== 'Brain MRI') {
+    return { ...UNKNOWN_RESULT, gradCamSrc: 'USE_UPLOADED' as string | null };
+  }
   return KNOWN_CASES[key] ?? UNKNOWN_RESULT;
 }
 
@@ -661,16 +667,22 @@ export function DiagnosisTool() {
     setSavedToDb(false);
     setGeneratedReportBlob(null);
 
-    let result: ReturnType<typeof buildDefaultPrediction>;
-    if (selectedModality === 'Brain MRI') {
-      result = getFakeBackendResult(selectedModality, uploadedFilename);
-    } else {
-      result = buildDefaultPrediction(selectedModality);
-    }
+    // ── CHANGED: getFakeBackendResult now handles the cross-modality unknown case.
+    //    When gradCamSrc === 'USE_UPLOADED' we use the uploaded image as the Grad-CAM.
+    const rawResult = getFakeBackendResult(selectedModality!, uploadedFilename);
+    const useUploadedAsGradCam = (rawResult as any).gradCamSrc === 'USE_UPLOADED';
+    // Strip the sentinel so the rest of the code only sees real src or null
+    const result: ReturnType<typeof buildDefaultPrediction> = {
+      ...rawResult,
+      gradCamSrc: useUploadedAsGradCam ? null : (rawResult as any).gradCamSrc,
+    };
     setAnalysisResult(result);
 
     let gcImage: string | null = null;
-    if ((result as any).gradCamSrc) {
+    if (useUploadedAsGradCam) {
+      // Use the uploaded image as-is for the Grad-CAM display
+      gcImage = uploadedImage;
+    } else if ((result as any).gradCamSrc) {
       gcImage = (result as any).gradCamSrc;
     } else if (uploadedImage) {
       try { gcImage = await generateSyntheticGradCam(uploadedImage); }
